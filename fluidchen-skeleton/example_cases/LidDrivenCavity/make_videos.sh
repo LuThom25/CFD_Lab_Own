@@ -10,11 +10,15 @@ FRM_DIR="$OUT_DIR/frames"
 VID_DIR="$OUT_DIR/videos"
 
 # Remove old videos so nothing from a previous run survives
+# Use both rm -rf on the directory AND a glob delete to catch any macOS-synced
+# duplicates with spaces in their names (e.g. "video_u 3.mp4").
 if [ -d "$VID_DIR" ]; then
     rm -rf "$VID_DIR"
     echo "Removed old videos/"
 fi
 mkdir -p "$VID_DIR"
+# Extra safety: remove any stray .mp4 files macOS may have re-synced back
+find "$VID_DIR" -name "*.mp4" -delete 2>/dev/null
 
 FPS=10   # frames per second -> 101 frames = ~10 s video
 
