@@ -34,18 +34,19 @@ FRM_DIR = OUT_DIR + "/frames"
 VID_DIR = OUT_DIR + "/videos"
 
 # ── Clean up old results so nothing from a previous run survives ──────────────
+# Delete EVERYTHING in OUT_DIR except the simulation VTK files.
+# This catches stale folders like "frames 2", "videos 2", "screenshots", etc.
 print("Cleaning up old results...")
-for old_dir in [FRM_DIR, VID_DIR]:
-    if os.path.isdir(old_dir):
-        shutil.rmtree(old_dir)
-        print(f"  removed: {os.path.basename(old_dir)}/")
-for pattern in ["final_*.png", "screenshots"]:
-    for old in glob.glob(OUT_DIR + "/" + pattern):
-        if os.path.isdir(old):
-            shutil.rmtree(old)
+if os.path.isdir(OUT_DIR):
+    for item in os.listdir(OUT_DIR):
+        if item.endswith(".vtk"):
+            continue                          # keep simulation output
+        item_path = os.path.join(OUT_DIR, item)
+        if os.path.isdir(item_path):
+            shutil.rmtree(item_path)
         else:
-            os.remove(old)
-        print(f"  removed: {os.path.basename(old)}")
+            os.remove(item_path)
+        print(f"  removed: {item}")
 
 os.makedirs(FRM_DIR, exist_ok=True)
 os.makedirs(VID_DIR, exist_ok=True)
