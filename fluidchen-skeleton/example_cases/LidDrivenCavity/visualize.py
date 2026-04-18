@@ -23,7 +23,7 @@ always reflects the physically meaningful variation.
 """
 
 from paraview.simple import *
-import os, glob
+import os, glob, shutil
 
 paraview.simple._DisableFirstRenderCameraReset()
 
@@ -31,7 +31,25 @@ paraview.simple._DisableFirstRenderCameraReset()
 BASE    = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = BASE + "/LidDrivenCavity_Output"
 FRM_DIR = OUT_DIR + "/frames"
+VID_DIR = OUT_DIR + "/videos"
+
+# ── Clean up old results so nothing from a previous run survives ──────────────
+print("Cleaning up old results...")
+for old_dir in [FRM_DIR, VID_DIR]:
+    if os.path.isdir(old_dir):
+        shutil.rmtree(old_dir)
+        print(f"  removed: {os.path.basename(old_dir)}/")
+for pattern in ["final_*.png", "screenshots"]:
+    for old in glob.glob(OUT_DIR + "/" + pattern):
+        if os.path.isdir(old):
+            shutil.rmtree(old)
+        else:
+            os.remove(old)
+        print(f"  removed: {os.path.basename(old)}")
+
 os.makedirs(FRM_DIR, exist_ok=True)
+os.makedirs(VID_DIR, exist_ok=True)
+print("Clean. Starting fresh.\n")
 
 # Sort VTK files by timestep index (filename format: CaseName_rank.timestep.vtk)
 def vtk_key(f):

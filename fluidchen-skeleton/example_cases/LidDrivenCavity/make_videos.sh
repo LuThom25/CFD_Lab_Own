@@ -8,6 +8,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT_DIR="$SCRIPT_DIR/LidDrivenCavity_Output"
 FRM_DIR="$OUT_DIR/frames"
 VID_DIR="$OUT_DIR/videos"
+
+# Remove old videos so nothing from a previous run survives
+if [ -d "$VID_DIR" ]; then
+    rm -rf "$VID_DIR"
+    echo "Removed old videos/"
+fi
 mkdir -p "$VID_DIR"
 
 FPS=10   # frames per second -> 101 frames = ~10 s video
