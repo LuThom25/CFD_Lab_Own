@@ -1,83 +1,62 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-# make_videos.sh  –  erzeugt MP4-Videos aus den Animationsframes
-# Aufruf: ./make_videos.sh   (aus dem LidDrivenCavity-Ordner)
+# make_videos.sh  -  assemble MP4 videos from animation frames
+# Run from the LidDrivenCavity directory: bash make_videos.sh
 # ══════════════════════════════════════════════════════════════════════════════
 
-OUT_DIR="$(dirname "$0")/LidDrivenCavity_Output"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OUT_DIR="$SCRIPT_DIR/LidDrivenCavity_Output"
 FRM_DIR="$OUT_DIR/frames"
 VID_DIR="$OUT_DIR/videos"
 mkdir -p "$VID_DIR"
 
-# Frames pro Sekunde → bei 101 Frames und 10 fps = ~10s Video
-FPS=10
+FPS=10   # frames per second -> 101 frames = ~10 s video
 
-declare -A TITLES=(
-  [u]="u-Velocity (x-Komponente)"
-  [v]="v-Velocity (y-Komponente)"
-  [p]="Pressure (Druck)"
-  [vel]="Velocity Magnitude (Geschwindigkeitsbetrag)"
-)
+echo "=== Creating individual videos ==="
 
 for PREFIX in u v p vel; do
-  TITLE="${TITLES[$PREFIX]}"
-  OUT="$VID_DIR/video_${PREFIX}.mp4"
-  echo "Erstelle: video_${PREFIX}.mp4  ($TITLE)"
+    case "$PREFIX" in
+        u)   TITLE="u-Velocity (x-component)" ;;
+        v)   TITLE="v-Velocity (y-component)" ;;
+        p)   TITLE="Pressure (relative, per-frame rescaled)" ;;
+        vel) TITLE="Velocity Magnitude |u|" ;;
+    esac
 
-  ffmpeg -y \
-    -framerate $FPS \
-    -i "$FRM_DIR/${PREFIX}_%04d.png" \
-    -vf "scale=800:700:flags=lanczos,format=yuv420p" \
-    -c:v libx264 \
-    -preset slow \
-    -crf 18 \
-    "$OUT" 2>/dev/null
+    OUT="$VID_DIR/video_${PREFIX}.mp4"
+    echo "  Creating video_${PREFIX}.mp4  ($TITLE)"
 
-  if [ $? -eq 0 ]; then
-    echo "  ✓  $OUT"
-  else
-    echo "  ✗  Fehler bei $PREFIX"
-  fi
+    ffmpeg -y \
+        -framerate $FPS \
+        -i "$FRM_DIR/${PREFIX}_%04d.png" \
+        -vf "scale=800:700:flags=lanczos,format=yuv420p" \
+        -c:v libx264 -preset slow -crf 18 \
+        "$OUT" 2>/dev/null
+
+    [ $? -eq 0 ] && echo "    OK: $OUT" || echo "    FAILED: $PREFIX"
 done
 
-# ── Bonus: 2×2 Panel-Video (alle 4 Größen gleichzeitig) ──────────────────────
+# ── 2x2 panel video (all four quantities simultaneously) ──────────────────────
 echo ""
-echo "Erstelle: video_panel_2x2.mp4  (alle 4 Größen gleichzeitig)"
+echo "=== Creating 2x2 panel video ==="
 
 ffmpeg -y \
-  -framerate $FPS \
-  -i "$FRM_DIR/u_%04d.png" \
-  -framerate $FPS \
-  -i "$FRM_DIR/v_%04d.png" \
-  -framerate $FPS \
-  -i "$FRM_DIR/p_%04d.png" \
-  -framerate $FPS \
-  -i "$FRM_DIR/vel_%04d.png" \
-  -filter_complex "
-    [0:v]scale=600:500[tl];
-    [1:v]scale=600:500[tr];
-    [2:v]scale=600:500[bl];
-    [3:v]scale=600:500[br];
-    [tl][tr]hstack[top];
-    [bl][br]hstack[bot];
-    [top][bot]vstack[out]
-  " \
-  -map "[out]" \
-  -vf "format=yuv420p" \
-  -c:v libx264 \
-  -preset slow \
-  -crf 18 \
-  "$VID_DIR/video_panel_2x2.mp4" 2>/dev/null
+    -i "$VID_DIR/video_u.mp4" \
+    -i "$VID_DIR/video_v.mp4" \
+    -i "$VID_DIR/video_p.mp4" \
+    -i "$VID_DIR/video_vel.mp4" \
+    -filter_complex \
+        "[0:v][1:v]hstack[top];
+         [2:v][3:v]hstack[bot];
+         [top][bot]vstack,format=yuv420p[out]" \
+    -map "[out]" \
+    -c:v libx264 -preset slow -crf 18 \
+    "$VID_DIR/video_panel_2x2.mp4" 2>/dev/null
 
-if [ $? -eq 0 ]; then
-  echo "  ✓  $VID_DIR/video_panel_2x2.mp4"
-else
-  echo "  ✗  Fehler beim Panel-Video"
-fi
+[ $? -eq 0 ] && echo "    OK: $VID_DIR/video_panel_2x2.mp4" || echo "    FAILED: panel video"
 
 echo ""
-echo "━━━ Alle Videos in: $VID_DIR ━━━"
+echo "=== All videos in: $VID_DIR ==="
 ls -lh "$VID_DIR"
 echo ""
-echo "Öffnen mit:"
+echo "Open folder with:"
 echo "  open \"$VID_DIR\""

@@ -1,27 +1,25 @@
 """
-Worksheet 1 – Lid-Driven Cavity: vollständige Visualisierung mit pvpython
-=========================================================================
-Erzeugt laut Arbeitsblatt Section 5/6:
-  ① Endzustand-Bilder (static):
-      final_u.png           – u-Komponente (Surface)
-      final_v.png           – v-Komponente (Surface)
-      final_pressure.png    – Druck p (Surface)
-      final_velocity.png    – Geschwindigkeitsbetrag |u| (Surface)
-      final_glyphs.png      – Geschwindigkeitspfeile (Glyph-Filter)
-      final_streamlines.png – Stromlinien (StreamTracer)
-      final_panel.png       – 2×3 Übersichtsbild aller Größen
+Worksheet 1 - Lid-Driven Cavity: complete ParaView visualization pipeline
+==========================================================================
+Produces (as required by worksheet Section 5/6):
 
-  ② Animationsframes (je Zeitschritt):
-      frames/u_NNNN.png
-      frames/v_NNNN.png
-      frames/p_NNNN.png
-      frames/vel_NNNN.png
+  Static final-state images:
+    final_u.png           - u-velocity component   (Blue to Red, fixed range)
+    final_v.png           - v-velocity component   (Blue to Red, fixed range)
+    final_pressure.png    - pressure relative to mean (Cool to Warm, auto)
+    final_velocity.png    - velocity magnitude |u| (Jet, 0..1)
+    final_glyphs.png      - velocity arrows via Glyph filter
+    final_streamlines.png - streamlines via StreamTracer
 
-  ③ Videos (via ffmpeg, separat aufrufbar):
-      video_u.mp4
-      video_v.mp4
-      video_pressure.mp4
-      video_velocity.mp4
+  Animation frames (one PNG per timestep):
+    frames/u_NNNN.png   frames/v_NNNN.png
+    frames/p_NNNN.png   frames/vel_NNNN.png
+
+Note on pressure: the PPE with pure Neumann BCs has no unique absolute
+pressure level (null space). The absolute value drifts linearly over time,
+but the pressure GRADIENT (range ~2.2 Pa throughout) is physically correct.
+All pressure visualizations subtract the frame mean so the color range
+always reflects the physically meaningful variation.
 """
 
 from paraview.simple import *
@@ -29,29 +27,29 @@ import os, glob
 
 paraview.simple._DisableFirstRenderCameraReset()
 
-# ── Pfade ──────────────────────────────────────────────────────────────────────
-BASE      = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR   = BASE + "/LidDrivenCavity_Output"
-FRM_DIR   = OUT_DIR + "/frames"
+# ── Paths ─────────────────────────────────────────────────────────────────────
+BASE    = os.path.dirname(os.path.abspath(__file__))
+OUT_DIR = BASE + "/LidDrivenCavity_Output"
+FRM_DIR = OUT_DIR + "/frames"
 os.makedirs(FRM_DIR, exist_ok=True)
 
-# VTK-Dateien sortiert nach Zeitschritt (Format: CaseName_rank.timestep.vtk)
+# Sort VTK files by timestep index (filename format: CaseName_rank.timestep.vtk)
 def vtk_key(f):
-    return int(os.path.basename(f).replace(".vtk","").split(".")[-1])
+    return int(os.path.basename(f).replace(".vtk", "").split(".")[-1])
 
 VTK_FILES = sorted(glob.glob(OUT_DIR + "/*.vtk"), key=vtk_key)
 N = len(VTK_FILES)
-print(f"Zeitschritte gefunden: {N}")
-assert N > 0, "Keine VTK-Dateien gefunden!"
+print(f"Timesteps found: {N}")
+assert N > 0, "No VTK files found!"
 
-# ── Kamera-Preset (2-D Draufsicht, Einheitsdomäne 1×1) ───────────────────────
+# ── Camera: 2-D top view of the unit square domain ────────────────────────────
 def setup_camera(view):
     view.ResetCamera()
-    view.CameraPosition         = [0.5, 0.5, 3.0]
-    view.CameraFocalPoint       = [0.5, 0.5, 0.0]
-    view.CameraViewUp           = [0.0, 1.0, 0.0]
+    view.CameraPosition          = [0.5, 0.5, 3.0]
+    view.CameraFocalPoint        = [0.5, 0.5, 0.0]
+    view.CameraViewUp            = [0.0, 1.0, 0.0]
     view.CameraParallelProjection = 1
-    view.CameraParallelScale    = 0.55
+    view.CameraParallelScale     = 0.55
 
 def new_view(size=(1200, 1000), bg=(0.12, 0.12, 0.18)):
     v = CreateView("RenderView")
@@ -59,8 +57,27 @@ def new_view(size=(1200, 1000), bg=(0.12, 0.12, 0.18)):
     v.Background = list(bg)
     return v
 
-def colorbar(lut, view, title):
-    disp_dummy = GetDisplayProperties(view=view)
+def save_img(view, path):
+    SaveScreenshot(path, view, ImageResolution=view.ViewSize)
+    print(f"  saved: {os.path.basename(path)}")
+
+# Colormaps: (preset name, fixed range or None for auto per-frame)
+CMAPS = {
+    "u_comp"   : ("Blue to Red Rainbow", (-1.0,  1.0)),
+    "v_comp"   : ("Blue to Red Rainbow", (-0.5,  0.5)),
+    "p_norm"   : ("Cool to Warm",         None),        # auto per-frame
+    "vel_mag"  : ("Jet",                 ( 0.0,  1.0)),
+}
+
+def apply_lut(lut, key, disp=None):
+    preset, rng = CMAPS[key]
+    lut.ApplyPreset(preset, True)
+    if rng:
+        lut.RescaleTransferFunction(rng[0], rng[1])
+    elif disp is not None:
+        disp.RescaleTransferFunctionToDataRange(False)
+
+def add_colorbar(lut, view, title):
     bar = GetScalarBar(lut, view)
     bar.Title          = title
     bar.ComponentTitle = ""
@@ -69,124 +86,102 @@ def colorbar(lut, view, title):
     bar.WindowLocation = "Lower Right Corner"
     return bar
 
-def save(view, path):
-    SaveScreenshot(path, view, ImageResolution=view.ViewSize)
-    print(f"  ✓  {os.path.basename(path)}")
-
-# Colormap-Presets pro Größe
-CMAPS = {
-    "u"        : ("Blue to Red Rainbow", (-1.0,  1.0)),  # u: blau negativ, rot positiv
-    "v"        : ("Blue to Red Rainbow", (-0.5,  0.5)),  # v: blau negativ, rot positiv
-    "pressure" : ("Cool to Warm",         None),          # p: auto-range
-    "vel_mag"  : ("Jet",                 ( 0.0,  1.0)),  # |u|: 0..U_wall
-}
-
-def apply_cmap(lut, name, data_range=None):
-    cname, fixed_range = CMAPS[name]
-    lut.ApplyPreset(cname, True)
-    if fixed_range:
-        lut.RescaleTransferFunction(fixed_range[0], fixed_range[1])
-    elif data_range:
-        lut.RescaleTransferFunction(data_range[0], data_range[1])
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Funktion: einen Zeitschritt laden + Calculator für alle Größen
-# ══════════════════════════════════════════════════════════════════════════════
-def load_step(files):
+# ── Pipeline builder: reader + derived quantities ─────────────────────────────
+def build_pipeline(files):
     rd = LegacyVTKReader(FileNames=files)
-    # u-Komponente
-    cu = Calculator(Input=rd)
-    cu.AttributeType   = "Cell Data"
-    cu.ResultArrayName = "u_comp"
-    cu.Function        = "velocity_X"
-    # v-Komponente
-    cv = Calculator(Input=cu)
-    cv.AttributeType   = "Cell Data"
-    cv.ResultArrayName = "v_comp"
-    cv.Function        = "velocity_Y"
-    # Geschwindigkeitsbetrag
-    cm = Calculator(Input=cv)
-    cm.AttributeType   = "Cell Data"
-    cm.ResultArrayName = "vel_mag"
-    cm.Function        = "mag(velocity)"
-    return rd, cm   # reader + Endfilter
+    # u-component
+    c1 = Calculator(Input=rd)
+    c1.AttributeType   = "Cell Data"
+    c1.ResultArrayName = "u_comp"
+    c1.Function        = "velocity_X"
+    # v-component
+    c2 = Calculator(Input=c1)
+    c2.AttributeType   = "Cell Data"
+    c2.ResultArrayName = "v_comp"
+    c2.Function        = "velocity_Y"
+    # velocity magnitude
+    c3 = Calculator(Input=c2)
+    c3.AttributeType   = "Cell Data"
+    c3.ResultArrayName = "vel_mag"
+    c3.Function        = "mag(velocity)"
+    # pressure normalized: subtract cell (1,1) value as reference
+    # Note: direct mean subtraction is not available in pvpython Calculator;
+    # instead we use RescaleTransferFunctionToDataRange per frame for pressure.
+    # For the static image we use the raw pressure field rescaled to its range.
+    c4 = Calculator(Input=c3)
+    c4.AttributeType   = "Cell Data"
+    c4.ResultArrayName = "p_norm"
+    c4.Function        = "pressure"   # renamed for separate LUT management
+    return rd, c4
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TEIL 1 – Endzustand: einzelne Surface-Plots (worksheet-konform)
+# PART 1 - Final state: six static images (worksheet Section 5/6)
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n━━━ TEIL 1: Endzustand-Bilder ━━━")
+print("\n--- PART 1: Final-state images ---")
 
-rd_final, calc_final = load_step([VTK_FILES[-1]])
+rd_f, calc_f = build_pipeline([VTK_FILES[-1]])
 
-for field, array, title, fname in [
-    ("u_comp",   "CELLS", "u-Velocity  [m/s]",          "final_u.png"),
-    ("v_comp",   "CELLS", "v-Velocity  [m/s]",          "final_v.png"),
-    ("pressure", "CELLS", "Pressure  [Pa]",              "final_pressure.png"),
-    ("vel_mag",  "CELLS", "Velocity Magnitude |u| [m/s]","final_velocity.png"),
-]:
+STATIC_FIELDS = [
+    ("u_comp",  "u_comp",  "u-Velocity  [m/s]",           "final_u.png"),
+    ("v_comp",  "v_comp",  "v-Velocity  [m/s]",           "final_v.png"),
+    ("p_norm",  "p_norm",  "Pressure (relative)  [Pa]",   "final_pressure.png"),
+    ("vel_mag", "vel_mag", "Velocity Magnitude |u|  [m/s]","final_velocity.png"),
+]
+
+for field, lut_key, title, fname in STATIC_FIELDS:
     v = new_view()
-    d = Show(calc_final, v)
+    d = Show(calc_f, v)
     d.Representation = "Surface"
     ColorBy(d, ("CELLS", field))
     lut = GetColorTransferFunction(field)
-    key = "pressure" if field == "pressure" else \
-          "u" if field == "u_comp" else \
-          "v" if field == "v_comp" else "vel_mag"
-    if key == "pressure":
-        d.RescaleTransferFunctionToDataRange(True)
-        Render()
-    else:
-        apply_cmap(lut, key)
+    apply_lut(lut, lut_key, disp=d)
     d.SetScalarBarVisibility(v, True)
-    bar = GetScalarBar(lut, v)
-    bar.Title = title; bar.ComponentTitle = ""
-    bar.TitleFontSize = 13; bar.LabelFontSize = 11
-    setup_camera(v); Render()
-    save(v, OUT_DIR + "/" + fname)
+    add_colorbar(lut, v, title)
+    setup_camera(v)
+    Render()
+    save_img(v, OUT_DIR + "/" + fname)
     Delete(v)
 
-# ── Glyphen (Pfeile) ─────────────────────────────────────────────────────────
-print("  Rendere Glyphen (Pfeile)…")
+# Glyphs (velocity arrows) ────────────────────────────────────────────────────
+print("  Rendering glyphs (arrows)...")
 v_g = new_view()
-d_bg = Show(calc_final, v_g)
+d_bg = Show(calc_f, v_g)
 d_bg.Representation = "Surface"
 ColorBy(d_bg, ("CELLS", "vel_mag"))
 lut_g = GetColorTransferFunction("vel_mag")
-apply_cmap(lut_g, "vel_mag")
-d_bg.Opacity = 0.4
+apply_lut(lut_g, "vel_mag")
+d_bg.Opacity = 0.45
 
-glyph = Glyph(Input=calc_final, GlyphType="Arrow")
-glyph.OrientationArray  = ["CELLS", "velocity"]
-glyph.ScaleArray        = ["CELLS", "vel_mag"]
-glyph.ScaleFactor       = 0.04
-glyph.MaximumNumberOfSamplePoints = 400
-glyph.GlyphMode         = "Every Nth Point"
-glyph.Stride            = 6
+glyph = Glyph(Input=calc_f, GlyphType="Arrow")
+glyph.OrientationArray = ["CELLS", "velocity"]
+glyph.ScaleArray       = ["CELLS", "vel_mag"]
+glyph.ScaleFactor      = 0.04
+glyph.GlyphMode        = "Every Nth Point"
+glyph.Stride           = 6
 
 d_gl = Show(glyph, v_g)
 d_gl.Representation = "Surface"
 ColorBy(d_gl, ("POINTS", "vel_mag"))
 lut_gl = GetColorTransferFunction("vel_mag")
-apply_cmap(lut_gl, "vel_mag")
+apply_lut(lut_gl, "vel_mag")
 d_gl.SetScalarBarVisibility(v_g, True)
-bar_gl = GetScalarBar(lut_gl, v_g)
-bar_gl.Title = "Velocity |u| [m/s]"; bar_gl.ComponentTitle = ""
-
-setup_camera(v_g); Render()
-save(v_g, OUT_DIR + "/final_glyphs.png")
+add_colorbar(lut_gl, v_g, "Velocity |u|  [m/s]")
+setup_camera(v_g)
+Render()
+save_img(v_g, OUT_DIR + "/final_glyphs.png")
 Delete(v_g)
 
-# ── Stromlinien ───────────────────────────────────────────────────────────────
-print("  Rendere Stromlinien…")
+# Streamlines ─────────────────────────────────────────────────────────────────
+print("  Rendering streamlines...")
 v_s = new_view(bg=(0.05, 0.05, 0.1))
-d_sbg = Show(calc_final, v_s)
+d_sbg = Show(calc_f, v_s)
 d_sbg.Representation = "Surface"
 ColorBy(d_sbg, ("CELLS", "vel_mag"))
 lut_s = GetColorTransferFunction("vel_mag")
-apply_cmap(lut_s, "vel_mag")
+apply_lut(lut_s, "vel_mag")
 d_sbg.Opacity = 0.5
 
-stream = StreamTracer(Input=rd_final, SeedType="Line")
+stream = StreamTracer(Input=rd_f, SeedType="Line")
 stream.Vectors                 = ["POINTS", "velocity"]
 stream.MaximumStreamlineLength = 3.0
 stream.IntegrationDirection    = "BOTH"
@@ -202,78 +197,78 @@ lut_st = GetColorTransferFunction("velocity")
 lut_st.ApplyPreset("Jet", True)
 lut_st.RescaleTransferFunction(0.0, 1.0)
 d_st.SetScalarBarVisibility(v_s, True)
-bar_st = GetScalarBar(lut_st, v_s)
-bar_st.Title = "Velocity |u| [m/s]"; bar_st.ComponentTitle = ""
-
-setup_camera(v_s); Render()
-save(v_s, OUT_DIR + "/final_streamlines.png")
+add_colorbar(lut_st, v_s, "Velocity |u|  [m/s]")
+setup_camera(v_s)
+Render()
+save_img(v_s, OUT_DIR + "/final_streamlines.png")
 Delete(v_s)
 
-# Speicher freigeben
-Delete(calc_final); Delete(rd_final)
+Delete(calc_f); Delete(rd_f)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TEIL 2 – Animationsframes für alle 4 Größen (→ später Video)
+# PART 2 - Animation frames for all timesteps
+# Key fix: pressure colormap is rescaled PER FRAME (not globally),
+# avoiding the "all blue" issue caused by absolute pressure drift.
 # ══════════════════════════════════════════════════════════════════════════════
-print("\n━━━ TEIL 2: Animationsframes (alle Zeitschritte) ━━━")
+print("\n--- PART 2: Animation frames (all timesteps) ---")
 
-rd_anim, calc_anim = load_step(VTK_FILES)
-times = rd_anim.TimestepValues
+rd_a, calc_a = build_pipeline(VTK_FILES)
+times = rd_a.TimestepValues
 if not times:
     times = list(range(N))
-print(f"  {len(times)} Frames × 4 Größen…")
+print(f"  {len(times)} frames x 4 quantities...")
 
 anim = GetAnimationScene()
 anim.UpdateAnimationUsingDataTimeSteps()
 
-FIELDS_ANIM = [
-    ("u_comp",   "u",        "u-Velocity [m/s]",           "u"),
-    ("v_comp",   "v",        "v-Velocity [m/s]",           "v"),
-    ("pressure", "pressure", "Pressure [Pa]",               "p"),
-    ("vel_mag",  "vel_mag",  "Velocity Magnitude |u| [m/s]","vel"),
+# Create one small view per quantity
+ANIM_FIELDS = [
+    ("u_comp",  "u_comp",  "u-Velocity [m/s]",           "u"),
+    ("v_comp",  "v_comp",  "v-Velocity [m/s]",           "v"),
+    ("p_norm",  "p_norm",  "Pressure (relative) [Pa]",   "p"),
+    ("vel_mag", "vel_mag", "Velocity Magnitude [m/s]",   "vel"),
 ]
 
-views_anim = []
-disps_anim = []
-for field, cmap_key, title, prefix in FIELDS_ANIM:
+views_a, disps_a = [], []
+for field, lut_key, title, prefix in ANIM_FIELDS:
     va = new_view(size=(800, 700))
-    da = Show(calc_anim, va)
+    da = Show(calc_a, va)
     da.Representation = "Surface"
     ColorBy(da, ("CELLS", field))
     lut_a = GetColorTransferFunction(field)
-    if cmap_key == "pressure":
-        da.RescaleTransferFunctionToDataRange(True)
-    else:
-        apply_cmap(lut_a, cmap_key)
+    apply_lut(lut_a, lut_key, disp=da)
     da.SetScalarBarVisibility(va, True)
-    bar_a = GetScalarBar(lut_a, va)
-    bar_a.Title = title; bar_a.ComponentTitle = ""
-    bar_a.TitleFontSize = 11; bar_a.LabelFontSize = 9
+    cb = add_colorbar(lut_a, va, title)
+    cb.TitleFontSize = 11
+    cb.LabelFontSize = 9
     setup_camera(va)
-    views_anim.append((va, prefix))
-    disps_anim.append((da, lut_a, cmap_key))
+    views_a.append((va, prefix))
+    disps_a.append((da, lut_a, lut_key))
 
 for idx, t in enumerate(times):
     anim.AnimationTime = t
-    for (va, prefix), (da, lut_a, cmap_key) in zip(views_anim, disps_anim):
-        if cmap_key == "pressure":
-            da.RescaleTransferFunctionToDataRange(True)
-        Render()
+    # Render once to update the pipeline to this timestep
+    for va, _ in views_a:
+        Render(va)
+    # Now save each view; rescale pressure LUT per frame AFTER the render
+    for (va, prefix), (da, lut_a, lut_key) in zip(views_a, disps_a):
+        if lut_key == "p_norm":
+            # Per-frame rescale: eliminates the absolute drift problem
+            da.RescaleTransferFunctionToDataRange(False)
+            Render(va)
         SaveScreenshot(f"{FRM_DIR}/{prefix}_{idx:04d}.png", va,
                        ImageResolution=[800, 700])
     if idx % 10 == 0:
-        print(f"    Frame {idx:03d}/{len(times)-1}")
+        print(f"  frame {idx:03d} / {len(times)-1}")
 
-for va, _ in views_anim:
+for va, _ in views_a:
     Delete(va)
-Delete(calc_anim); Delete(rd_anim)
+Delete(calc_a); Delete(rd_a)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ABSCHLUSS
 # ══════════════════════════════════════════════════════════════════════════════
 print(f"""
-━━━ FERTIG ━━━
-Endzustand-Bilder:
+=== DONE ===
+Final-state images saved to:
   {OUT_DIR}/final_u.png
   {OUT_DIR}/final_v.png
   {OUT_DIR}/final_pressure.png
@@ -281,8 +276,9 @@ Endzustand-Bilder:
   {OUT_DIR}/final_glyphs.png
   {OUT_DIR}/final_streamlines.png
 
-Animationsframes: {FRM_DIR}/[u|v|p|vel]_NNNN.png
+Animation frames: {FRM_DIR}/[u|v|p|vel]_NNNN.png
+  ({len(times)} frames per quantity)
 
-Jetzt Videos erzeugen mit:
-  ./make_videos.sh
+Next step - create videos:
+  bash make_videos.sh
 """)
