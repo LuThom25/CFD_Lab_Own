@@ -50,6 +50,14 @@ if os.path.isdir(OUT_DIR):
 
 os.makedirs(FRM_DIR, exist_ok=True)
 os.makedirs(VID_DIR, exist_ok=True)
+
+# Extra pass: macOS iCloud can re-sync stale files (e.g. "u_0031 2.png") back
+# into freshly created directories between shutil.rmtree and here.
+# Wipe every file that survived or was re-synced into these directories.
+for _dir in (FRM_DIR, VID_DIR):
+    for _f in glob.glob(_dir + "/*"):
+        os.remove(_f)
+
 print("Clean. Starting fresh.\n")
 
 # Sort VTK files by timestep index (filename format: CaseName_rank.timestep.vtk)
@@ -82,9 +90,13 @@ def save_img(view, path):
 
 # Colormaps: (preset name, fixed range or None for auto per-frame)
 CMAPS = {
-    "u_comp"   : ("Blue to Red Rainbow", (-1.0,  1.0)),
-    "v_comp"   : ("Blue to Red Rainbow", (-0.5,  0.5)),
+    # u: lid moves at +1.0; recirculation gives u_min ≈ -0.21 (Ghia 1982, Re=100)
+    "u_comp"   : ("Blue to Red Rainbow", (-0.5,  1.0)),
+    # v: symmetric recirculation, v_max ≈ ±0.18 (Ghia 1982, Re=100) → ±0.25 fills colormap well
+    "v_comp"   : ("Blue to Red Rainbow", (-0.25, 0.25)),
+    # pressure: pure Neumann → absolute level drifts; rescale per-frame to show gradient
     "p_norm"   : ("Cool to Warm",         None),        # auto per-frame
+    # velocity magnitude: bounded by lid speed U_wall = 1.0
     "vel_mag"  : ("Jet",                 ( 0.0,  1.0)),
 }
 
