@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <vector>
 
@@ -175,11 +176,73 @@ void Case::set_file_names(std::string file_name) {
  * For information about the classes and functions, you can check the header files.
  */
 void Case::simulate() {
+    // Main simulation loop following the Chorin Projection (fractional-step) algorithm.
+    // Algorithmic order per time step:
+    //   1. Apply velocity BCs  (sets ghost-cell velocities, including moving lid)
+    //   2. Compute fluxes F, G (Eq. 9 & 10 — explicit Euler momentum predictor)
+    //   3. Apply flux BCs      (F/G at boundary faces)
+    //   4. Compute RS          (Eq. 11 — RHS of pressure Poisson equation)
+    //   5. Iterative SOR solve until residual < eps or itermax reached
+    //      + apply pressure BCs after every sweep
+    //   6. Correct velocities  (Eq. 7 & 8 — pressure projection step)
+    //   7. Compute adaptive dt (Eqs. 12 & 13 — CFL and viscous stability)
+    //   8. Advance time and output VTK files at the requested frequency
 
     double t = 0.0;
     double dt = _field.dt();
     int timestep = 0;
     double output_counter = 0.0;
+
+    // Write the initial state (t = 0) before any time advancement
+    output_vtk(timestep);
+
+    while (t < _t_end) {
+        // --- Step 1: Apply velocity boundary conditions ---
+        for (auto &boundary : _boundaries) {
+            boundary->applyVelocity(_field);
+        }
+
+        // --- Step 2: Compute intermediate fluxes F and G (Eq. 9 & 10) ---
+        _field.calculate_fluxes(_grid);
+
+        // --- Step 3: Apply flux boundary conditions at walls ---
+        for (auto &boundary : _boundaries) {
+            boundary->applyFlux(_field);
+        }
+
+        // --- Step 4: Compute RHS of pressure Poisson equation (Eq. 11) ---
+        _field.calculate_rs(_grid);
+
+        // --- Step 5: Iterative SOR pressure solve ---
+        // Iterate until residual < tolerance or maximum iteration count is reached.
+        int iter = 0;
+        double residual = std::numeric_limits<double>::max();
+        while (iter < _max_iter && residual > _tolerance) {
+            residual = _pressure_solver->solve(_field, _grid, _boundaries);
+            // Apply pressure BCs (Neumann: dp/dn = 0) after every SOR sweep
+            for (auto &boundary : _boundaries) {
+                boundary->applyPressure(_field);
+            }
+            ++iter;
+        }
+
+        // --- Step 6: Correct velocities using updated pressure (Eq. 7 & 8) ---
+        _field.calculate_velocities(_grid);
+
+        // --- Step 7: Compute adaptive time step for the next iteration (Eq. 12 & 13) ---
+        dt = _field.calculate_dt(_grid);
+
+        // Advance simulation time
+        t += dt;
+        ++timestep;
+        output_counter += dt;
+
+        // --- Step 8: Write VTK output at the requested frequency ---
+        if (output_counter >= _output_freq) {
+            output_vtk(timestep);
+            output_counter -= _output_freq;
+        }
+    }
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
