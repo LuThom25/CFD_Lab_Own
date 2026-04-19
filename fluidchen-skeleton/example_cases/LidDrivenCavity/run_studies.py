@@ -20,10 +20,26 @@ Tasks:
 
 import subprocess, re, time, shutil, sys, tempfile, math
 from pathlib import Path
+import matplotlib
+matplotlib.use("Agg")          # headless – no GUI needed
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent.resolve()
 BINARY     = SCRIPT_DIR.parent.parent / "build" / "fluidchen"
+PLOTS_DIR  = SCRIPT_DIR / "LidDrivenCavity_Output" / "study_plots"
+
+# ── Plot style ────────────────────────────────────────────────────────────────
+plt.rcParams.update({
+    "figure.dpi": 150,
+    "axes.titlesize": 13,
+    "axes.labelsize": 11,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "axes.grid": True,
+    "grid.alpha": 0.35,
+})
 
 # ── Parse the SUMMARY line written by Case::simulate() ────────────────────────
 SUMMARY_RE = re.compile(
@@ -194,6 +210,24 @@ def task5():
     print("  is the optimal choice. Near omega≈1.7–1.9 is typically best for 50×50.")
     print("  omega<1: under-relaxation (slow).  omega→2: over-relaxation (diverges).")
 
+    # ── Plot 5a ────────────────────────────────────────────────────────────────
+    omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
+    res_vals = [float(r[3]) for r in rows if r[3] != "-"]
+    best_omg = omg_vals[res_vals.index(min(res_vals))]
+    colors   = ["tab:green" if o == best_omg else "tab:blue" for o in omg_vals]
+    fig, ax  = plt.subplots(figsize=(7, 4))
+    ax.bar([str(o) for o in omg_vals], res_vals, color=colors, edgecolor="black", linewidth=0.6)
+    ax.set_xlabel("Relaxation factor ω")
+    ax.set_ylabel("Avg SOR residual (lower = better)")
+    ax.set_title("Task 5a — SOR Residual vs. Relaxation Factor ω\n"
+                 "(itermax=500, 50×50 grid, Re=100)")
+    green_patch = mpatches.Patch(color="tab:green", label=f"Best ω = {best_omg}")
+    ax.legend(handles=[green_patch])
+    fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "task5a_omega_residual.png")
+    plt.close(fig)
+    print(f"\n  → Plot saved: study_plots/task5a_omega_residual.png")
+
     # ── 5b: vary itermax ───────────────────────────────────────────────────
     print("\n── 5b: Effect of itermax (omega=1.7) ──\n")
     itermaxs = [5, 10, 20, 50, 100, 200]
@@ -217,6 +251,23 @@ def task5():
     print("\n  Note: Once avg_iter < itermax the solver converged fully every step.")
     print("  Small itermax (e.g., 5) leaves residual too high → inaccurate pressure,")
     print("  but simulation may still complete (with worse velocity accuracy).")
+
+    # ── Plot 5b ────────────────────────────────────────────────────────────────
+    im_vals  = [r[0] for r in rows2]
+    iter_vals= [float(r[1]) if r[1] != "-" else 0 for r in rows2]
+    fig, ax  = plt.subplots(figsize=(6, 4))
+    ax.bar([str(v) for v in im_vals], iter_vals, color="tab:orange",
+           edgecolor="black", linewidth=0.6)
+    ax.plot([str(v) for v in im_vals], im_vals, "k--o", markersize=5,
+            label="itermax limit")
+    ax.set_xlabel("itermax")
+    ax.set_ylabel("Avg SOR iterations used")
+    ax.set_title("Task 5b — SOR Iterations vs. itermax\n(ω=1.7, 50×50 grid, Re=100)")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "task5b_itermax.png")
+    plt.close(fig)
+    print(f"  → Plot saved: study_plots/task5b_itermax.png")
 
 # ── Task 6: Fixed time step stability ─────────────────────────────────────────
 def task6():
@@ -257,6 +308,46 @@ def task6():
     print(f"  → Adaptive stepping (tau=0.5) automatically uses dt = 0.5·{dt_visc:.4f} = {0.5*dt_visc:.4f}.")
     print("  → For fixed dt, the safe region is dt < dt_visc ≈ 0.010.")
 
+    # ── Plot 6 ─────────────────────────────────────────────────────────────────
+    dt_vals  = [r[0] for r in rows]
+    statuses = [r[5] for r in rows]
+    cfl_vals = [float(r[1]) for r in rows]
+    visc_vals= [float(r[3]) for r in rows]
+    bar_colors = ["tab:green" if s == "OK" else "tab:red" for s in statuses]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+
+    # Left: stability by dt
+    ax1.bar([str(d) for d in dt_vals], [1]*len(dt_vals),
+            color=bar_colors, edgecolor="black", linewidth=0.6)
+    ax1.set_xlabel("Fixed dt")
+    ax1.set_ylabel("Stable / Diverged")
+    ax1.set_yticks([])
+    ax1.set_title("Simulation Outcome per dt")
+    ax1.tick_params(axis="x", rotation=45)
+    green_p = mpatches.Patch(color="tab:green", label="OK (stable)")
+    red_p   = mpatches.Patch(color="tab:red",   label="DIVERGED")
+    ax1.legend(handles=[green_p, red_p])
+
+    # Right: CFL and visc fractions
+    x = range(len(dt_vals))
+    w = 0.38
+    ax2.bar([i - w/2 for i in x], cfl_vals,  width=w, label="CFL = dt/dx",       color="tab:blue",   edgecolor="black", linewidth=0.5)
+    ax2.bar([i + w/2 for i in x], visc_vals, width=w, label="dt/dt_visc",         color="tab:orange", edgecolor="black", linewidth=0.5)
+    ax2.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="limit = 1")
+    ax2.set_xticks(list(x))
+    ax2.set_xticklabels([str(d) for d in dt_vals], rotation=45)
+    ax2.set_xlabel("Fixed dt")
+    ax2.set_ylabel("Fraction of stability limit")
+    ax2.set_title("CFL and Viscous Stability Fractions")
+    ax2.legend(fontsize=9)
+
+    fig.suptitle("Task 6 — Fixed Time Step Stability  (50×50, nu=0.01)", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "task6_dt_stability.png")
+    plt.close(fig)
+    print(f"  → Plot saved: study_plots/task6_dt_stability.png")
+
 # ── Task 7: Grid refinement study ─────────────────────────────────────────────
 def task7():
     section("Task 7 — Grid Refinement (fixed dt=0.05, nu=0.001, Re=1000)")
@@ -292,6 +383,38 @@ def task7():
     print("  • Finer grids REQUIRE smaller dt → use adaptive time stepping!")
     print("  • With adaptive dt (tau=0.5), ALL grid sizes converge correctly.")
     print("  • At Re=1000 (nu=0.001) SOR needs more iterations than at Re=100.")
+
+    # ── Plot 7 ─────────────────────────────────────────────────────────────────
+    grid_labels = [r[0] for r in rows]
+    cfl_vals7   = [float(r[2]) for r in rows]
+    statuses7   = [r[4] for r in rows]
+    bar_colors7 = ["tab:green" if s == "OK" else "tab:red" for s in statuses7]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+
+    ax1.bar(grid_labels, cfl_vals7, color=bar_colors7, edgecolor="black", linewidth=0.6)
+    ax1.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="CFL limit = 1")
+    ax1.set_xlabel("Grid resolution")
+    ax1.set_ylabel("CFL ≈ dt / dx")
+    ax1.set_title("CFL Number per Grid  (fixed dt=0.05)")
+    green_p = mpatches.Patch(color="tab:green", label="OK (stable)")
+    red_p   = mpatches.Patch(color="tab:red",   label="DIVERGED")
+    ax1.legend(handles=[green_p, red_p, mpatches.Patch(color="none")])
+    ax1.legend(handles=[green_p, red_p,
+               mpatches.Patch(color="none", label="— CFL limit")])
+
+    sor_vals7 = [float(r[5]) if r[5] != "-" else 0 for r in rows]
+    ax2.bar(grid_labels, sor_vals7, color=bar_colors7, edgecolor="black", linewidth=0.6)
+    ax2.set_xlabel("Grid resolution")
+    ax2.set_ylabel("Avg SOR iterations")
+    ax2.set_title("Avg SOR Iterations per Grid")
+    ax2.legend(handles=[green_p, red_p])
+
+    fig.suptitle("Task 7 — Grid Refinement Study  (fixed dt=0.05, nu=0.001, Re=1000)", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "task7_grid_refinement.png")
+    plt.close(fig)
+    print(f"  → Plot saved: study_plots/task7_grid_refinement.png")
 
 # ── Task 8: Viscosity / Reynolds number study ─────────────────────────────────
 def task8():
@@ -333,12 +456,50 @@ def task8():
     print("  • At Re=10000 the flow is likely unsteady; adaptive dt keeps it stable.")
     print("    Longer t_end and finer grids are needed to resolve the turbulent regime.")
 
+    # ── Plot 8 ─────────────────────────────────────────────────────────────────
+    re_vals   = [int(1.0/nu) for nu in nus]
+    avg_dts   = [r[2] for r in rows]
+    dt_floats = []
+    for s in avg_dts:
+        try:    dt_floats.append(float(s))
+        except: dt_floats.append(0.0)
+    dt_visc_vals = [(1.0/50)**2 / (4*nu) for nu in nus]   # dx²/(4ν)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+
+    ax1.semilogx(re_vals, dt_floats, "o-", color="tab:blue",   linewidth=2, markersize=7, label="avg adaptive dt")
+    ax1.semilogx(re_vals, dt_visc_vals, "s--", color="tab:orange", linewidth=1.5, markersize=6, label="dt_visc = dx²/(4ν)")
+    ax1.set_xlabel("Reynolds number Re")
+    ax1.set_ylabel("Time step dt  [s]")
+    ax1.set_title("Adaptive dt vs. Re")
+    ax1.legend()
+    ax1.set_xticks(re_vals)
+    ax1.set_xticklabels([str(r) for r in re_vals])
+
+    sor_vals8 = [float(r[3]) if r[3] != "-" else 0 for r in rows]
+    ax2.bar([str(r) for r in re_vals], sor_vals8, color="tab:purple",
+            edgecolor="black", linewidth=0.6)
+    ax2.axhline(100, color="red", linewidth=1.4, linestyle="--", label="itermax = 100")
+    ax2.set_xlabel("Reynolds number Re")
+    ax2.set_ylabel("Avg SOR iterations")
+    ax2.set_title("SOR Iterations vs. Re")
+    ax2.legend()
+
+    fig.suptitle("Task 8 — Viscosity / Reynolds Number Study  (50×50, adaptive dt, t_end=10)", fontsize=11)
+    fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "task8_viscosity_study.png")
+    plt.close(fig)
+    print(f"  → Plot saved: study_plots/task8_viscosity_study.png")
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     if not BINARY.exists():
         print(f"[ERROR] Binary not found: {BINARY}")
         print("  Run:  cd fluidchen-skeleton/build && cmake .. && make -j4")
         sys.exit(1)
+
+    # Ensure plots output directory exists
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Decide which tasks to run
     args  = sys.argv[1:]
@@ -347,6 +508,7 @@ def main():
     print("=" * 66)
     print("  Worksheet 1 — Simulation Tasks 4–8")
     print(f"  Binary : {BINARY}")
+    print(f"  Plots  : {PLOTS_DIR}")
     print("=" * 66)
 
     if 4 in tasks: task4()
@@ -358,6 +520,7 @@ def main():
     print("\n" + "=" * 66)
     print("  All selected studies complete.")
     print("  Results above answer Tasks 4–8 of Worksheet 1.")
+    print(f"  Plots saved to: {PLOTS_DIR}")
     print("=" * 66 + "\n")
 
 if __name__ == "__main__":
