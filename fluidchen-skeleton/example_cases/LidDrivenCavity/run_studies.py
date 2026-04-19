@@ -574,13 +574,16 @@ def task7():
 
     if vel7_imgs:
         keys = sorted(vel7_imgs.keys())
-        fig, axes = plt.subplots(2, len(keys),
-                                 figsize=(3.5 * len(keys), 7.5),
-                                 gridspec_kw={"hspace": 0.05, "wspace": 0.05})
-        if len(keys) == 1:
-            axes = [[axes[0]], [axes[1]]]
+        n_cols   = len(keys)
+        # Images are 1200×1000 (aspect 1.2): col width ≥ row height × 1.2
+        h_row    = 4.2                          # inches per image row
+        w_col    = h_row * (1200 / 1000)        # = 5.04"
+        fig, axes = plt.subplots(2, n_cols,
+                                 figsize=(w_col * n_cols + 1.0, h_row * 2 + 1.8),
+                                 gridspec_kw={"hspace": 0.04, "wspace": 0.04},
+                                 squeeze=False)
         for col, n in enumerate(keys):
-            for row, (img_dict, lbl) in enumerate([(vel7_imgs, "Velocity magnitude"),
+            for row, (img_dict, lbl) in enumerate([(vel7_imgs,    "Velocity magnitude"),
                                                     (stream7_imgs, "Streamlines")]):
                 ax = axes[row][col]
                 if n in img_dict and img_dict[n].exists():
@@ -589,7 +592,7 @@ def task7():
                 if row == 0:
                     ax.set_title(f"{n}×{n}  (dx={1/n:.4f})", fontsize=11)
                 if col == 0:
-                    ax.set_ylabel(lbl, fontsize=10)
+                    ax.set_ylabel(lbl, fontsize=10, labelpad=4)
         fig.suptitle("Task 7 — Stable Grids (fixed dt=0.05, nu=0.001, Re=1000)",
                      fontsize=12, y=1.01)
         out_cmp7 = PLOTS_DIR / "task7_grid_comparison.png"
@@ -704,9 +707,13 @@ def task8():
     # ── Assemble 2-row comparison grid (vel | streamlines) × 4 Re values ──────
     if vel_imgs:
         res_keys = sorted(vel_imgs.keys())
-        n        = len(res_keys)
-        fig, axes = plt.subplots(2, n, figsize=(3.5 * n, 7.5),
-                                 gridspec_kw={"hspace": 0.05, "wspace": 0.05})
+        n_cols   = len(res_keys)
+        h_row    = 4.2
+        w_col    = h_row * (1200 / 1000)
+        fig, axes = plt.subplots(2, n_cols,
+                                 figsize=(w_col * n_cols + 1.0, h_row * 2 + 1.8),
+                                 gridspec_kw={"hspace": 0.04, "wspace": 0.04},
+                                 squeeze=False)
         row_labels = ["Velocity magnitude", "Streamlines"]
         img_dicts  = [vel_imgs, stream_imgs]
 
