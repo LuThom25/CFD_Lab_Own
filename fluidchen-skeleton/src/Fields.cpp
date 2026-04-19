@@ -109,3 +109,4 @@ double &Fields::rs(int i, int j) { return _RS(i, j); }
 Matrix<double> &Fields::p_matrix() { return _P; }
 
 double Fields::dt() const { return _dt; }
+double Fields::tau() const { return _tau; }

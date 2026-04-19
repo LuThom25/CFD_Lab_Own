@@ -66,6 +66,11 @@ class Case {
     /// Maximum number of iterations for the solver
     int _max_iter;
 
+    /// Kinematic viscosity (stored for console output)
+    double _nu{0.0};
+    /// SOR relaxation factor (stored for console output)
+    double _omg{0.0};
+
     /**
      * @brief Creating file names from given input data file
      *

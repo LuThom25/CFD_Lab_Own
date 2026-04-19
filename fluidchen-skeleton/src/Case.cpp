@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -96,6 +97,8 @@ Case::Case(std::string file_name, int argn, char **args) {
     _pressure_solver = std::make_unique<SOR>(omg);
     _max_iter = itermax;
     _tolerance = eps;
+    _nu  = nu;
+    _omg = omg;
 
     // Construct boundaries
     if (not _grid.moving_wall_cells().empty()) {
@@ -176,73 +179,152 @@ void Case::set_file_names(std::string file_name) {
  * For information about the classes and functions, you can check the header files.
  */
 void Case::simulate() {
-    // Main simulation loop following the Chorin Projection (fractional-step) algorithm.
-    // Algorithmic order per time step:
-    //   1. Apply velocity BCs  (sets ghost-cell velocities, including moving lid)
-    //   2. Compute fluxes F, G (Eq. 9 & 10 — explicit Euler momentum predictor)
-    //   3. Apply flux BCs      (F/G at boundary faces)
-    //   4. Compute RS          (Eq. 11 — RHS of pressure Poisson equation)
-    //   5. Iterative SOR solve until residual < eps or itermax reached
-    //      + apply pressure BCs after every sweep
-    //   6. Correct velocities  (Eq. 7 & 8 — pressure projection step)
-    //   7. Compute adaptive dt (Eqs. 12 & 13 — CFL and viscous stability)
-    //   8. Advance time and output VTK files at the requested frequency
-
-    double t = 0.0;
-    double dt = _field.dt();
-    int timestep = 0;
+    double t             = 0.0;
+    double dt            = _field.dt();
+    int    timestep      = 0;
+    int    vtk_count     = 0;
     double output_counter = 0.0;
 
-    // Write the initial state (t = 0) before any time advancement
+    // Bookkeeping for console output and the machine-readable SUMMARY line
+    int    last_sor_iter  = 0;
+    double last_sor_res   = 0.0;
+    long   total_sor_iter = 0;
+    int    max_sor_iter   = 0;
+    double total_res_sum  = 0.0;   // sum of achieved residuals for avg_res
+    double total_dt_sum   = 0.0;
+    bool   diverged       = false;
+
+    // ── Start-up header ────────────────────────────────────────────────────────
+    // Re = U*L/nu with U=1, L=1 (lid-driven cavity scaling)
+    double Re = (_nu > 0.0) ? (1.0 / _nu) : std::numeric_limits<double>::infinity();
+    std::cout
+        << "\n============================================================\n"
+        << " Fluidchen CFD Solver  —  " << _case_name << "\n"
+        << "============================================================\n"
+        << std::fixed << std::setprecision(4)
+        << "  Grid    : " << _grid.size_x() << " x " << _grid.size_y()
+        << "  (dx=" << _grid.dx() << "  dy=" << _grid.dy() << ")\n"
+        << "  nu      : " << _nu << "   Re ~ " << std::setprecision(0) << Re << "\n"
+        << std::setprecision(2)
+        << "  t_end   : " << _t_end << "   output every " << _output_freq << " time units\n";
+
+    if (_field.tau() > 0.0)
+        std::cout << "  dt      : adaptive (tau=" << _field.tau()
+                  << ")   initial dt = " << std::setprecision(6) << dt << "\n";
+    else
+        std::cout << "  dt      : FIXED = " << std::setprecision(6) << dt
+                  << "   (adaptive disabled — tau <= 0)\n";
+
+    std::cout
+        << "  SOR     : omega=" << std::setprecision(2) << _omg
+        << "   itermax=" << _max_iter
+        << "   eps=" << std::scientific << std::setprecision(2) << _tolerance << "\n"
+        << "  Output  : " << _dict_name << "/\n"
+        << "------------------------------------------------------------\n"
+        << std::flush;
+
+    // ── Initial state ──────────────────────────────────────────────────────────
     output_vtk(timestep);
+    vtk_count++;
 
+    // ── Main loop (Chorin Projection / fractional-step method) ────────────────
     while (t < _t_end) {
-        // --- Step 1: Apply velocity boundary conditions ---
-        for (auto &boundary : _boundaries) {
-            boundary->applyVelocity(_field);
-        }
 
-        // --- Step 2: Compute intermediate fluxes F and G (Eq. 9 & 10) ---
+        // Step 1: Velocity BCs (ghost cells, moving lid)
+        for (auto &boundary : _boundaries)
+            boundary->applyVelocity(_field);
+
+        // Step 2: Intermediate fluxes F and G (Eq. 9 & 10)
         _field.calculate_fluxes(_grid);
 
-        // --- Step 3: Apply flux boundary conditions at walls ---
-        for (auto &boundary : _boundaries) {
+        // Step 3: Flux BCs at walls
+        for (auto &boundary : _boundaries)
             boundary->applyFlux(_field);
-        }
 
-        // --- Step 4: Compute RHS of pressure Poisson equation (Eq. 11) ---
+        // Step 4: RHS of pressure Poisson equation (Eq. 11)
         _field.calculate_rs(_grid);
 
-        // --- Step 5: Iterative SOR pressure solve ---
-        // Iterate until residual < tolerance or maximum iteration count is reached.
-        int iter = 0;
+        // Step 5: SOR pressure solve — iterate until res < eps or itermax reached
+        int    iter     = 0;
         double residual = std::numeric_limits<double>::max();
         while (iter < _max_iter && residual > _tolerance) {
             residual = _pressure_solver->solve(_field, _grid, _boundaries);
-            // Apply pressure BCs (Neumann: dp/dn = 0) after every SOR sweep
-            for (auto &boundary : _boundaries) {
+            for (auto &boundary : _boundaries)
                 boundary->applyPressure(_field);
-            }
             ++iter;
         }
+        last_sor_iter  = iter;
+        last_sor_res   = residual;
+        total_sor_iter += iter;
+        total_res_sum  += residual;
+        if (iter > max_sor_iter) max_sor_iter = iter;
 
-        // --- Step 6: Correct velocities using updated pressure (Eq. 7 & 8) ---
+        // Divergence check — NaN/Inf residual or runaway values signal instability
+        if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
+            std::cout
+                << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t
+                << "  step=" << timestep
+                << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n"
+                << "           Possible cause: dt too large (CFL violation).\n"
+                << "           Try smaller dt, or enable adaptive stepping (tau > 0).\n";
+            diverged = true;
+            break;
+        }
+
+        // Step 6: Correct velocities using updated pressure (Eq. 7 & 8)
         _field.calculate_velocities(_grid);
 
-        // --- Step 7: Compute adaptive time step for the next iteration (Eq. 12 & 13) ---
+        // Step 7: Compute adaptive dt for the next step (Eqs. 12 & 13)
         dt = _field.calculate_dt(_grid);
+        total_dt_sum += dt;
 
-        // Advance simulation time
         t += dt;
         ++timestep;
         output_counter += dt;
 
-        // --- Step 8: Write VTK output at the requested frequency ---
+        // Step 8: VTK output + progress line at each output interval
         if (output_counter >= _output_freq) {
             output_vtk(timestep);
+            vtk_count++;
             output_counter -= _output_freq;
+
+            std::cout
+                << "  [vtk=" << std::setw(3) << vtk_count
+                << " | t=" << std::fixed << std::setprecision(3) << std::setw(8) << t
+                << " | step=" << std::setw(6) << timestep
+                << " | dt=" << std::scientific << std::setprecision(2) << dt
+                << " | SOR: iter=" << std::setw(3) << last_sor_iter
+                << "  res=" << std::setprecision(2) << last_sor_res
+                << "]\n" << std::flush;
         }
     }
+
+    // ── Final summary ─────────────────────────────────────────────────────────
+    double avg_sor = (timestep > 0) ? static_cast<double>(total_sor_iter) / timestep : 0.0;
+    double avg_res = (timestep > 0) ? total_res_sum / timestep : last_sor_res;
+    double avg_dt  = (timestep > 0) ? total_dt_sum / timestep : dt;
+
+    std::cout
+        << "------------------------------------------------------------\n"
+        << "  Done: t=" << std::fixed << std::setprecision(3) << t
+        << "  steps=" << timestep << "  VTK files=" << vtk_count << "\n"
+        << "  SOR : avg=" << std::fixed << std::setprecision(1) << avg_sor
+        << "  max=" << max_sor_iter
+        << "  avg_dt=" << std::scientific << std::setprecision(2) << avg_dt
+        << "\n\n";
+
+    // One-line machine-readable summary (parsed by run_studies.py)
+    std::cout
+        << "SUMMARY"
+        << " t="       << std::fixed     << std::setprecision(3) << t
+        << " steps="   << timestep
+        << " vtk="     << vtk_count
+        << " avg_sor=" << std::fixed      << std::setprecision(1) << avg_sor
+        << " max_sor=" << max_sor_iter
+        << " avg_res=" << std::scientific << std::setprecision(2) << avg_res
+        << " avg_dt="  << std::scientific << std::setprecision(2) << avg_dt
+        << " status="  << (diverged ? "DIVERGED" : "OK")
+        << "\n";
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
