@@ -24,7 +24,7 @@ import matplotlib
 matplotlib.use("Agg")          # headless – no GUI needed
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -49,6 +49,94 @@ plt.rcParams.update({
     "axes.grid": True,
     "grid.alpha": 0.35,
 })
+
+# ── PIL comparison grid (pixel-perfect, no matplotlib layout clipping) ────────
+def _load_font(size):
+    for p in ["/System/Library/Fonts/Helvetica.ttc",
+              "/System/Library/Fonts/SFNS.ttf",
+              "/Library/Fonts/Arial.ttf"]:
+        if Path(p).exists():
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
+def make_comparison_grid(img_rows, col_titles, row_labels, suptitle, out_path):
+    """
+    Assemble a 2-D grid of images (PIL Paths) into a single PNG.
+    img_rows : list[list[Path|None]]  — [row][col]
+    Uses PIL directly → no matplotlib axes clipping, every pixel is correct.
+    """
+    # Determine cell size from first valid image
+    cell_w, cell_h = 1200, 1000
+    for row in img_rows:
+        for p in row:
+            if p and Path(p).exists():
+                cell_w, cell_h = Image.open(p).size
+                break
+        else:
+            continue
+        break
+
+    n_rows = len(img_rows)
+    n_cols = max(len(r) for r in img_rows)
+
+    PAD      = 10   # px gap between images
+    SUP_H    = 64   # suptitle bar height
+    COL_H    = 54   # column-title bar height
+    ROW_LW   = 170  # row-label column width
+
+    total_w = ROW_LW + n_cols * cell_w + (n_cols + 1) * PAD
+    total_h = SUP_H + n_rows * (COL_H + cell_h) + (n_rows + 1) * PAD
+
+    canvas = Image.new("RGB", (total_w, total_h), (245, 245, 245))
+    draw   = ImageDraw.Draw(canvas)
+
+    f_sup = _load_font(28)
+    f_col = _load_font(20)
+    f_row = _load_font(18)
+
+    # ── Suptitle bar ──────────────────────────────────────────────────────────
+    draw.rectangle([(0, 0), (total_w, SUP_H)], fill=(40, 40, 50))
+    bb = draw.textbbox((0, 0), suptitle, font=f_sup)
+    draw.text(((total_w - (bb[2]-bb[0]))//2, (SUP_H - (bb[3]-bb[1]))//2),
+              suptitle, fill=(255, 255, 255), font=f_sup)
+
+    # ── Column titles ─────────────────────────────────────────────────────────
+    for c, ct in enumerate(col_titles):
+        x0 = ROW_LW + PAD + c * (cell_w + PAD)
+        draw.rectangle([(x0, SUP_H), (x0 + cell_w, SUP_H + COL_H)],
+                       fill=(60, 60, 75))
+        bb = draw.textbbox((0, 0), ct, font=f_col)
+        draw.text((x0 + (cell_w - (bb[2]-bb[0]))//2,
+                   SUP_H + (COL_H - (bb[3]-bb[1]))//2),
+                  ct, fill=(220, 220, 220), font=f_col)
+
+    # ── Row labels + images ───────────────────────────────────────────────────
+    for r, row in enumerate(img_rows):
+        y0 = SUP_H + r * (COL_H + cell_h + PAD) + COL_H + PAD
+
+        # Row label column (dark sidebar)
+        draw.rectangle([(0, y0), (ROW_LW, y0 + cell_h)], fill=(60, 60, 75))
+        rl = row_labels[r] if r < len(row_labels) else ""
+        bb = draw.textbbox((0, 0), rl, font=f_row)
+        draw.text((( ROW_LW - (bb[2]-bb[0]))//2,
+                   y0 + (cell_h - (bb[3]-bb[1]))//2),
+                  rl, fill=(220, 220, 220), font=f_row)
+
+        for c, p in enumerate(row):
+            x0 = ROW_LW + PAD + c * (cell_w + PAD)
+            if p and Path(p).exists():
+                canvas.paste(Image.open(p), (x0, y0))
+            else:
+                draw.rectangle([(x0, y0), (x0+cell_w, y0+cell_h)],
+                                fill=(200, 200, 200))
+                draw.text((x0 + cell_w//2, y0 + cell_h//2), "N/A",
+                          fill=(100, 100, 100), font=f_col, anchor="mm")
+
+    canvas.save(out_path, dpi=(150, 150))
+    return Image.open(out_path).size
 
 # ── Parse the SUMMARY line written by Case::simulate() ────────────────────────
 SUMMARY_RE = re.compile(
@@ -573,32 +661,18 @@ def task7():
                 print(f"    → pvpython rendering failed")
 
     if vel7_imgs:
-        keys = sorted(vel7_imgs.keys())
-        n_cols   = len(keys)
-        # Images are 1200×1000 (aspect 1.2): col width ≥ row height × 1.2
-        h_row    = 4.2                          # inches per image row
-        w_col    = h_row * (1200 / 1000)        # = 5.04"
-        fig, axes = plt.subplots(2, n_cols,
-                                 figsize=(w_col * n_cols + 1.0, h_row * 2 + 1.8),
-                                 gridspec_kw={"hspace": 0.04, "wspace": 0.04},
-                                 squeeze=False)
-        for col, n in enumerate(keys):
-            for row, (img_dict, lbl) in enumerate([(vel7_imgs,    "Velocity magnitude"),
-                                                    (stream7_imgs, "Streamlines")]):
-                ax = axes[row][col]
-                if n in img_dict and img_dict[n].exists():
-                    ax.imshow(Image.open(img_dict[n]))
-                ax.axis("off")
-                if row == 0:
-                    ax.set_title(f"{n}×{n}  (dx={1/n:.4f})", fontsize=11)
-                if col == 0:
-                    ax.set_ylabel(lbl, fontsize=10, labelpad=4)
-        fig.suptitle("Task 7 — Stable Grids (fixed dt=0.05, nu=0.001, Re=1000)",
-                     fontsize=12, y=1.01)
+        keys     = sorted(vel7_imgs.keys())
+        img_rows = [[vel7_imgs.get(n),    stream7_imgs.get(n)] for n in keys]
+        img_rows = list(map(list, zip(*img_rows)))  # transpose: rows=type, cols=grid
+        col_titles = [f"{n}×{n}  (dx={1/n:.4f})" for n in keys]
         out_cmp7 = PLOTS_DIR / "task7_grid_comparison.png"
-        fig.savefig(out_cmp7, bbox_inches="tight", dpi=120)
-        plt.close(fig)
-        print(f"\n  → Comparison grid saved: study_plots/task7_grid_comparison.png")
+        sz = make_comparison_grid(
+            img_rows, col_titles,
+            ["Velocity magnitude", "Streamlines"],
+            "Task 7 — Stable Grids  (fixed dt=0.05, nu=0.001, Re=1000)",
+            out_cmp7,
+        )
+        print(f"\n  → Comparison grid saved: study_plots/task7_grid_comparison.png  {sz}")
 
     # ── Plot 7 ─────────────────────────────────────────────────────────────────
     grid_labels = [r[0] for r in rows]
@@ -706,37 +780,18 @@ def task8():
 
     # ── Assemble 2-row comparison grid (vel | streamlines) × 4 Re values ──────
     if vel_imgs:
-        res_keys = sorted(vel_imgs.keys())
-        n_cols   = len(res_keys)
-        h_row    = 4.2
-        w_col    = h_row * (1200 / 1000)
-        fig, axes = plt.subplots(2, n_cols,
-                                 figsize=(w_col * n_cols + 1.0, h_row * 2 + 1.8),
-                                 gridspec_kw={"hspace": 0.04, "wspace": 0.04},
-                                 squeeze=False)
-        row_labels = ["Velocity magnitude", "Streamlines"]
-        img_dicts  = [vel_imgs, stream_imgs]
-
-        for row, (img_dict, row_lbl) in enumerate(zip(img_dicts, row_labels)):
-            for col, Re in enumerate(res_keys):
-                ax = axes[row][col]
-                if Re in img_dict and img_dict[Re].exists():
-                    ax.imshow(Image.open(img_dict[Re]))
-                else:
-                    ax.text(0.5, 0.5, "N/A", ha="center", va="center",
-                            transform=ax.transAxes)
-                ax.axis("off")
-                if row == 0:
-                    ax.set_title(f"Re = {Re}\n(nu = {1/Re:.4f})", fontsize=11)
-                if col == 0:
-                    ax.set_ylabel(row_lbl, fontsize=10, labelpad=4)
-
-        fig.suptitle("Task 8 — LDC Flow at Different Reynolds Numbers  (t = 10 s)",
-                     fontsize=13, y=1.01)
-        out_cmp = PLOTS_DIR / "task8_re_comparison.png"
-        fig.savefig(out_cmp, bbox_inches="tight", dpi=120)
-        plt.close(fig)
-        print(f"\n  → Comparison grid saved: study_plots/task8_re_comparison.png")
+        res_keys   = sorted(vel_imgs.keys())
+        img_rows   = [[vel_imgs.get(Re),    stream_imgs.get(Re)] for Re in res_keys]
+        img_rows   = list(map(list, zip(*img_rows)))  # transpose
+        col_titles = [f"Re = {Re}\n(nu = {1/Re:.4f})" for Re in res_keys]
+        out_cmp    = PLOTS_DIR / "task8_re_comparison.png"
+        sz = make_comparison_grid(
+            img_rows, col_titles,
+            ["Velocity magnitude", "Streamlines"],
+            "Task 8 — LDC Flow at Different Reynolds Numbers  (t = 10 s)",
+            out_cmp,
+        )
+        print(f"\n  → Comparison grid saved: study_plots/task8_re_comparison.png  {sz}")
 
     # ── Plot 8 ─────────────────────────────────────────────────────────────────
     re_vals   = [int(1.0/nu) for nu in nus]
