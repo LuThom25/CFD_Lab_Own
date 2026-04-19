@@ -24,10 +24,19 @@ import matplotlib
 matplotlib.use("Agg")          # headless – no GUI needed
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from PIL import Image
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent.resolve()
 BINARY     = SCRIPT_DIR.parent.parent / "build" / "fluidchen"
+
+# pvpython for ParaView rendering
+_PV_CANDIDATES = [
+    Path("/Applications/ParaView-6.1.0.app/Contents/bin/pvpython"),
+    Path("/usr/local/bin/pvpython"),
+    Path("/usr/bin/pvpython"),
+]
+PVPYTHON = next((p for p in _PV_CANDIDATES if p.exists()), None)
 PLOTS_DIR  = SCRIPT_DIR / "LidDrivenCavity_Output" / "study_plots"
 
 # ── Plot style ────────────────────────────────────────────────────────────────
@@ -109,6 +118,114 @@ def run_case(cfg: dict, label: str, timeout: int = 120) -> dict:
         return {"label": label, "status": "DIVERGED", "wall_time": round(wall, 1)}
     return {"label": label, "status": "ERROR",
             "wall_time": round(wall, 1), "_out": stdout[-400:]}
+
+# ── Utility: run case WITH VTK output kept in out_dir ────────────────────────
+def run_case_vtk(cfg: dict, label: str, out_dir: Path, timeout: int = 600) -> dict:
+    """Like run_case but keeps VTK output; out_dir must already exist."""
+    dat = out_dir / f"{label}.dat"
+    make_dat(cfg, dat)
+    t0 = time.time()
+    try:
+        proc = subprocess.run(
+            [str(BINARY), str(dat)],
+            capture_output=True, text=True, timeout=timeout
+        )
+        stdout = proc.stdout
+    except subprocess.TimeoutExpired:
+        return {"label": label, "status": "TIMEOUT", "wall_time": timeout,
+                "vtk_dir": out_dir / f"{label}_Output"}
+    wall = time.time() - t0
+    vtk_dir = out_dir / f"{label}_Output"
+    m = SUMMARY_RE.search(stdout)
+    if m:
+        t_f, steps, vtk, avg_sor, max_sor, avg_res, avg_dt, status = m.groups()
+        return dict(label=label, status=status, t_final=float(t_f),
+                    steps=int(steps), vtk=int(vtk), avg_sor=float(avg_sor),
+                    max_sor=int(max_sor), avg_res=float(avg_res),
+                    avg_dt=float(avg_dt), wall_time=round(wall,1), vtk_dir=vtk_dir)
+    if "[DIVERGED]" in stdout:
+        return {"label": label, "status": "DIVERGED",
+                "wall_time": round(wall,1), "vtk_dir": vtk_dir}
+    return {"label": label, "status": "ERROR",
+            "wall_time": round(wall,1), "vtk_dir": vtk_dir}
+
+# ── Utility: render final-state velocity+streamlines via pvpython ─────────────
+_PV_RENDER_SCRIPT = r"""
+import sys, glob
+from paraview.simple import *
+
+vtk_dir, out_vel, out_stream = sys.argv[1], sys.argv[2], sys.argv[3]
+
+vtk_files = sorted(glob.glob(vtk_dir + '/*.vtk'))
+if not vtk_files:
+    sys.exit(1)
+
+reader = LegacyVTKReader(FileNames=vtk_files)
+scene  = GetAnimationScene()
+scene.UpdateAnimationUsingDataTimeSteps()
+scene.GoToLast()
+
+rv = CreateRenderView()
+rv.ViewSize = [560, 560]
+rv.Background = [1.0, 1.0, 1.0]
+rv.OrientationAxesVisibility = 0
+
+# ── Velocity magnitude ────────────────────────────────────────────────────────
+disp = Show(reader, rv)
+ColorBy(disp, ('CELLS', 'velocity', 'Magnitude'))
+disp.RescaleTransferFunctionToDataRange(True, False)
+lut = GetColorTransferFunction('velocity')
+lut.ApplyPreset('Cool to Warm', True)
+sb = GetScalarBar(lut, rv)
+sb.Visibility = 1
+sb.Title = 'Velocity |u| [m/s]'
+sb.ComponentTitle = ''
+sb.TitleFontSize = 11
+sb.LabelFontSize = 10
+rv.ResetCamera()
+Render()
+SaveScreenshot(out_vel, rv, ImageResolution=[560, 560])
+
+# ── Streamlines ───────────────────────────────────────────────────────────────
+Hide(reader, rv)
+stream = StreamTracer(Input=reader, SeedType='Line')
+stream.SeedType.Point1 = [0.05, 0.5, 0]
+stream.SeedType.Point2 = [0.95, 0.5, 0]
+stream.SeedType.Resolution = 25
+stream.MaximumStreamlineLength = 3.0
+sd = Show(stream, rv)
+ColorBy(sd, ('POINTS', 'velocity', 'Magnitude'))
+sd.RescaleTransferFunctionToDataRange(True, False)
+lut2 = GetColorTransferFunction('velocity')
+lut2.ApplyPreset('Cool to Warm', True)
+sb2 = GetScalarBar(lut2, rv)
+sb2.Visibility = 1
+sb2.Title = 'Velocity |u| [m/s]'
+sb2.ComponentTitle = ''
+sd.LineWidth = 2.0
+rv.ResetCamera()
+Render()
+SaveScreenshot(out_stream, rv, ImageResolution=[560, 560])
+print('PVRENDER_OK')
+"""
+
+def pvrender_case(vtk_dir: Path, out_vel: Path, out_stream: Path) -> bool:
+    """Render velocity magnitude and streamlines for the last timestep."""
+    if PVPYTHON is None:
+        return False
+    tmp = Path(tempfile.mktemp(suffix="_pv.py"))
+    tmp.write_text(_PV_RENDER_SCRIPT)
+    try:
+        proc = subprocess.run(
+            [str(PVPYTHON), str(tmp),
+             str(vtk_dir), str(out_vel), str(out_stream)],
+            capture_output=True, text=True, timeout=120
+        )
+        return "PVRENDER_OK" in proc.stdout
+    except Exception:
+        return False
+    finally:
+        tmp.unlink(missing_ok=True)
 
 # ── Utility: print a bordered ASCII table ────────────────────────────────────
 def print_table(headers: list, rows: list) -> None:
@@ -455,6 +572,68 @@ def task8():
     print("    Fix: increase itermax (e.g., 500) or use a pressure reference point.")
     print("  • At Re=10000 the flow is likely unsteady; adaptive dt keeps it stable.")
     print("    Longer t_end and finer grids are needed to resolve the turbulent regime.")
+
+    # ── 8c: Visual output per Re (velocity + streamlines) ─────────────────────
+    print("\n── 8c: Flow visualization per Re (velocity magnitude + streamlines) ──\n")
+    VIS_DIR = SCRIPT_DIR / "LidDrivenCavity_Output" / "task8_visuals"
+    VIS_DIR.mkdir(parents=True, exist_ok=True)
+
+    vel_imgs    = {}   # Re → Path of velocity PNG
+    stream_imgs = {}   # Re → Path of streamlines PNG
+
+    for nu in nus:
+        Re    = int(1.0 / nu)
+        label = f"Re{Re}"
+        case_dir = VIS_DIR / label
+        case_dir.mkdir(exist_ok=True)
+
+        cfg_vis = {**BASE_CFG, "nu": nu, "tau": 0.5, "t_end": 10.0, "dt_value": 0.5}
+        print(f"  Running Re={Re:>5} (nu={nu}) for VTK output ...", flush=True)
+        r = run_case_vtk(cfg_vis, label, case_dir, timeout=300)
+        print(f"    solver: {r['status']}", flush=True)
+
+        if r["status"] == "OK" and r.get("vtk_dir") and r["vtk_dir"].exists():
+            out_vel    = VIS_DIR / f"{label}_velocity.png"
+            out_stream = VIS_DIR / f"{label}_streamlines.png"
+            ok = pvrender_case(r["vtk_dir"], out_vel, out_stream)
+            if ok:
+                vel_imgs[Re]    = out_vel
+                stream_imgs[Re] = out_stream
+                print(f"    → images saved: {label}_velocity.png  {label}_streamlines.png")
+            else:
+                print(f"    → pvpython rendering failed (pvpython={PVPYTHON})")
+        else:
+            print(f"    → skipping render ({r['status']})")
+
+    # ── Assemble 2-row comparison grid (vel | streamlines) × 4 Re values ──────
+    if vel_imgs:
+        res_keys = sorted(vel_imgs.keys())
+        n        = len(res_keys)
+        fig, axes = plt.subplots(2, n, figsize=(3.5 * n, 7.5),
+                                 gridspec_kw={"hspace": 0.05, "wspace": 0.05})
+        row_labels = ["Velocity magnitude", "Streamlines"]
+        img_dicts  = [vel_imgs, stream_imgs]
+
+        for row, (img_dict, row_lbl) in enumerate(zip(img_dicts, row_labels)):
+            for col, Re in enumerate(res_keys):
+                ax = axes[row][col]
+                if Re in img_dict and img_dict[Re].exists():
+                    ax.imshow(Image.open(img_dict[Re]))
+                else:
+                    ax.text(0.5, 0.5, "N/A", ha="center", va="center",
+                            transform=ax.transAxes)
+                ax.axis("off")
+                if row == 0:
+                    ax.set_title(f"Re = {Re}\n(nu = {1/Re:.4f})", fontsize=11)
+                if col == 0:
+                    ax.set_ylabel(row_lbl, fontsize=10, labelpad=4)
+
+        fig.suptitle("Task 8 — LDC Flow at Different Reynolds Numbers  (t = 10 s)",
+                     fontsize=13, y=1.01)
+        out_cmp = PLOTS_DIR / "task8_re_comparison.png"
+        fig.savefig(out_cmp, bbox_inches="tight", dpi=120)
+        plt.close(fig)
+        print(f"\n  → Comparison grid saved: study_plots/task8_re_comparison.png")
 
     # ── Plot 8 ─────────────────────────────────────────────────────────────────
     re_vals   = [int(1.0/nu) for nu in nus]
