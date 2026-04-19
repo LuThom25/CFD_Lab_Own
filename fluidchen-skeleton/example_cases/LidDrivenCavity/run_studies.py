@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Worksheet 1 — Parameter Studies (Tasks 5–8)
-============================================
+Worksheet 1 — Simulation Tasks 4–8
+====================================
 Runs the fluidchen solver with different parameter configurations and
 presents formatted comparison tables for each task.
 
 Usage (from this directory):
-  python3 run_studies.py          # all tasks
-  python3 run_studies.py 5        # Task 5 only
+  python3 run_studies.py          # all tasks (4-8)
+  python3 run_studies.py 4        # Task 4 only
   python3 run_studies.py 5 6 7 8  # explicit task list
 
 Tasks:
+  4 — Base LDC simulation: 50×50, nu=0.01 (Re=100), adaptive dt, t_end=50
   5 — SOR solver: effect of relaxation factor omega and itermax
   6 — Fixed time step: which dt values lead to a stable simulation?
   7 — Grid refinement: imax = 16, 32, 64, 128, 256 with fixed dt = 0.05
@@ -79,6 +80,7 @@ def run_case(cfg: dict, label: str, timeout: int = 120) -> dict:
             status   = status,
             t_final  = float(t_f),
             steps    = int(steps),
+            vtk      = int(vtk),
             avg_sor  = float(avg_sor),
             max_sor  = int(max_sor),
             avg_res  = float(avg_res),
@@ -112,6 +114,40 @@ def section(title: str) -> None:
     print("\n" + "=" * 66)
     print(f"  {title}")
     print("=" * 66)
+
+# ── Task 4: Base LDC simulation ───────────────────────────────────────────────
+def task4():
+    section("Task 4 — Base Lid-Driven Cavity Simulation")
+    print("Grid: 50×50  nu=0.01  Re=100  adaptive dt (tau=0.5)  t_end=50.0")
+    print("VTK output every dt_value=0.5 s  →  100 snapshots\n")
+
+    cfg = {**BASE_CFG, "t_end": 50.0, "dt_value": 0.5}
+    print("  Running ... (t_end=50.0, may take ~1–2 min)", flush=True)
+    r   = run_case(cfg, "ldc_base", timeout=300)
+    print(f"  done  ({r['status']})\n", flush=True)
+
+    rows = [[
+        "50×50",
+        "0.01",
+        "100",
+        f"{r.get('avg_dt', '-'):.2e}" if "avg_dt" in r else "-",
+        r.get("steps", "-"),
+        r.get("vtk", "-"),
+        f"{r.get('avg_sor', '-'):.1f}" if "avg_sor" in r else "-",
+        f"{r.get('avg_res', '-'):.3f}" if "avg_res" in r else "-",
+        r["status"],
+    ]]
+    print_table(
+        ["grid", "nu", "Re", "avg dt", "steps", "VTK files", "avg SOR iter", "avg residual", "status"],
+        rows,
+    )
+    print()
+    print("  The simulation runs until t=50 s to allow the flow to reach a")
+    print("  quasi-steady state. At Re=100 a single stable vortex fills the")
+    print("  cavity. Key observations:")
+    print("  • Adaptive dt settles at ~5e-3 s (viscous stability limit × tau).")
+    print("  • SOR always hits itermax=100 due to the singular Neumann system.")
+    print("  • VTK snapshots are visualized via visualize.py / make_videos.sh.")
 
 # ── Task 5: SOR omega and itermax study ───────────────────────────────────────
 def task5():
@@ -306,13 +342,14 @@ def main():
 
     # Decide which tasks to run
     args  = sys.argv[1:]
-    tasks = [int(a) for a in args if a.isdigit()] or [5, 6, 7, 8]
+    tasks = [int(a) for a in args if a.isdigit()] or [4, 5, 6, 7, 8]
 
     print("=" * 66)
-    print("  Worksheet 1 — Parameter Studies (Tasks 5–8)")
+    print("  Worksheet 1 — Simulation Tasks 4–8")
     print(f"  Binary : {BINARY}")
     print("=" * 66)
 
+    if 4 in tasks: task4()
     if 5 in tasks: task5()
     if 6 in tasks: task6()
     if 7 in tasks: task7()
@@ -320,7 +357,7 @@ def main():
 
     print("\n" + "=" * 66)
     print("  All selected studies complete.")
-    print("  Results above answer Tasks 5–8 of Worksheet 1.")
+    print("  Results above answer Tasks 4–8 of Worksheet 1.")
     print("=" * 66 + "\n")
 
 if __name__ == "__main__":
