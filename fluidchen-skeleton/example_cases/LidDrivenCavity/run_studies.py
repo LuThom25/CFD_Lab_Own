@@ -153,6 +153,7 @@ def run_case_vtk(cfg: dict, label: str, out_dir: Path, timeout: int = 600) -> di
 _PV_RENDER_SCRIPT = r"""
 import sys, glob
 from paraview.simple import *
+paraview.simple._DisableFirstRenderCameraReset()
 
 vtk_dir, out_vel, out_stream = sys.argv[1], sys.argv[2], sys.argv[3]
 
@@ -160,52 +161,89 @@ vtk_files = sorted(glob.glob(vtk_dir + '/*.vtk'))
 if not vtk_files:
     sys.exit(1)
 
+# ── Load + go to last timestep ────────────────────────────────────────────────
 reader = LegacyVTKReader(FileNames=vtk_files)
 scene  = GetAnimationScene()
 scene.UpdateAnimationUsingDataTimeSteps()
 scene.GoToLast()
 
-rv = CreateRenderView()
-rv.ViewSize = [560, 560]
-rv.Background = [1.0, 1.0, 1.0]
-rv.OrientationAxesVisibility = 0
+# ── Calculator pipeline (same as visualize.py) ────────────────────────────────
+c1 = Calculator(Input=reader); c1.AttributeType='Cell Data'
+c1.ResultArrayName='u_comp';   c1.Function='velocity_X'
+c2 = Calculator(Input=c1);    c2.AttributeType='Cell Data'
+c2.ResultArrayName='v_comp';   c2.Function='velocity_Y'
+c3 = Calculator(Input=c2);    c3.AttributeType='Cell Data'
+c3.ResultArrayName='vel_mag';  c3.Function='mag(velocity)'
 
-# ── Velocity magnitude ────────────────────────────────────────────────────────
-disp = Show(reader, rv)
-ColorBy(disp, ('CELLS', 'velocity', 'Magnitude'))
-disp.RescaleTransferFunctionToDataRange(True, False)
-lut = GetColorTransferFunction('velocity')
-lut.ApplyPreset('Cool to Warm', True)
-sb = GetScalarBar(lut, rv)
-sb.Visibility = 1
-sb.Title = 'Velocity |u| [m/s]'
-sb.ComponentTitle = ''
-sb.TitleFontSize = 11
-sb.LabelFontSize = 10
-rv.ResetCamera()
-Render()
-SaveScreenshot(out_vel, rv, ImageResolution=[560, 560])
+# ── Shared camera (2-D parallel, centered on unit square) ────────────────────
+def setup_camera(v):
+    v.CameraPosition           = [0.5, 0.5, 3.0]
+    v.CameraFocalPoint         = [0.5, 0.5, 0.0]
+    v.CameraViewUp             = [0.0, 1.0, 0.0]
+    v.CameraParallelProjection = 1
+    v.CameraParallelScale      = 0.55
 
-# ── Streamlines ───────────────────────────────────────────────────────────────
-Hide(reader, rv)
+def add_colorbar(lut, view, title):
+    sb = GetScalarBar(lut, view)
+    sb.Title           = title
+    sb.ComponentTitle  = ''
+    sb.TitleFontSize   = 13
+    sb.LabelFontSize   = 11
+    sb.WindowLocation  = 'Lower Right Corner'
+    sb.Visibility      = 1
+
+IMG = [1200, 1000]
+
+# ── Image 1: velocity magnitude (Jet 0..1, dark bg) ─────────────────────────
+v1 = CreateRenderView()
+v1.ViewSize                = IMG
+v1.Background              = [0.12, 0.12, 0.18]
+v1.OrientationAxesVisibility = 0
+d1 = Show(c3, v1)
+d1.Representation = 'Surface'
+ColorBy(d1, ('CELLS', 'vel_mag'))
+lut1 = GetColorTransferFunction('vel_mag')
+lut1.ApplyPreset('Jet', True)
+lut1.RescaleTransferFunction(0.0, 1.0)
+d1.SetScalarBarVisibility(v1, True)
+add_colorbar(lut1, v1, 'Velocity Magnitude |u|  [m/s]')
+setup_camera(v1)
+Render(v1)
+SaveScreenshot(out_vel, v1, ImageResolution=IMG)
+
+# ── Image 2: streamlines over vel-mag background (dark blue bg, Jet) ─────────
+v2 = CreateRenderView()
+v2.ViewSize                = IMG
+v2.Background              = [0.05, 0.05, 0.10]
+v2.OrientationAxesVisibility = 0
+d_bg = Show(c3, v2)
+d_bg.Representation = 'Surface'
+ColorBy(d_bg, ('CELLS', 'vel_mag'))
+lut_bg = GetColorTransferFunction('vel_mag')
+lut_bg.ApplyPreset('Jet', True)
+lut_bg.RescaleTransferFunction(0.0, 1.0)
+d_bg.Opacity = 0.5
+
 stream = StreamTracer(Input=reader, SeedType='Line')
-stream.SeedType.Point1 = [0.05, 0.5, 0]
-stream.SeedType.Point2 = [0.95, 0.5, 0]
-stream.SeedType.Resolution = 25
+stream.Vectors                 = ['POINTS', 'velocity']
 stream.MaximumStreamlineLength = 3.0
-sd = Show(stream, rv)
-ColorBy(sd, ('POINTS', 'velocity', 'Magnitude'))
-sd.RescaleTransferFunctionToDataRange(True, False)
-lut2 = GetColorTransferFunction('velocity')
-lut2.ApplyPreset('Cool to Warm', True)
-sb2 = GetScalarBar(lut2, rv)
-sb2.Visibility = 1
-sb2.Title = 'Velocity |u| [m/s]'
-sb2.ComponentTitle = ''
-sd.LineWidth = 2.0
-rv.ResetCamera()
-Render()
-SaveScreenshot(out_stream, rv, ImageResolution=[560, 560])
+stream.IntegrationDirection    = 'BOTH'
+stream.SeedType.Point1         = [0.05, 0.5, 0.0]
+stream.SeedType.Point2         = [0.95, 0.5, 0.0]
+stream.SeedType.Resolution     = 40
+d_st = Show(stream, v2)
+d_st.Representation = 'Surface'
+d_st.LineWidth      = 2.0
+ColorBy(d_st, ('POINTS', 'velocity'))
+lut_st = GetColorTransferFunction('velocity')
+lut_st.ApplyPreset('Jet', True)
+lut_st.RescaleTransferFunction(0.0, 1.0)
+d_st.SetScalarBarVisibility(v2, True)
+add_colorbar(lut_st, v2, 'Velocity |u|  [m/s]')
+setup_camera(v2)
+Render(v2)
+SaveScreenshot(out_stream, v2, ImageResolution=IMG)
+
 print('PVRENDER_OK')
 """
 
@@ -500,6 +538,64 @@ def task7():
     print("  • Finer grids REQUIRE smaller dt → use adaptive time stepping!")
     print("  • With adaptive dt (tau=0.5), ALL grid sizes converge correctly.")
     print("  • At Re=1000 (nu=0.001) SOR needs more iterations than at Re=100.")
+
+    # ── 7b: Visualize stable grid cases ───────────────────────────────────────
+    print("\n── 7b: Flow visualization for stable grids ──\n")
+    VIS7_DIR = SCRIPT_DIR / "LidDrivenCavity_Output" / "task7_visuals"
+    VIS7_DIR.mkdir(parents=True, exist_ok=True)
+
+    vel7_imgs    = {}   # n → Path
+    stream7_imgs = {}
+
+    for n in grids:
+        dx  = 1.0 / n
+        cfl = 0.05 / dx
+        if cfl >= 1.0:
+            print(f"  {n}×{n}: CFL={cfl:.2f} ≥ 1  →  skipping (diverged)")
+            continue
+        label7   = f"grid{n}"
+        case_dir = VIS7_DIR / label7
+        case_dir.mkdir(exist_ok=True)
+        cfg_vis  = {**BASE_CFG, "imax": n, "jmax": n,
+                    "dt": 0.05, "tau": -1, "nu": 0.001, "dt_value": 0.5}
+        print(f"  Running {n}×{n} for VTK output ...", flush=True)
+        r = run_case_vtk(cfg_vis, label7, case_dir, timeout=120)
+        print(f"    solver: {r['status']}", flush=True)
+        if r["status"] == "OK" and r.get("vtk_dir") and r["vtk_dir"].exists():
+            out_vel7    = VIS7_DIR / f"{label7}_velocity.png"
+            out_stream7 = VIS7_DIR / f"{label7}_streamlines.png"
+            ok = pvrender_case(r["vtk_dir"], out_vel7, out_stream7)
+            if ok:
+                vel7_imgs[n]    = out_vel7
+                stream7_imgs[n] = out_stream7
+                print(f"    → images saved: {label7}_velocity.png  {label7}_streamlines.png")
+            else:
+                print(f"    → pvpython rendering failed")
+
+    if vel7_imgs:
+        keys = sorted(vel7_imgs.keys())
+        fig, axes = plt.subplots(2, len(keys),
+                                 figsize=(3.5 * len(keys), 7.5),
+                                 gridspec_kw={"hspace": 0.05, "wspace": 0.05})
+        if len(keys) == 1:
+            axes = [[axes[0]], [axes[1]]]
+        for col, n in enumerate(keys):
+            for row, (img_dict, lbl) in enumerate([(vel7_imgs, "Velocity magnitude"),
+                                                    (stream7_imgs, "Streamlines")]):
+                ax = axes[row][col]
+                if n in img_dict and img_dict[n].exists():
+                    ax.imshow(Image.open(img_dict[n]))
+                ax.axis("off")
+                if row == 0:
+                    ax.set_title(f"{n}×{n}  (dx={1/n:.4f})", fontsize=11)
+                if col == 0:
+                    ax.set_ylabel(lbl, fontsize=10)
+        fig.suptitle("Task 7 — Stable Grids (fixed dt=0.05, nu=0.001, Re=1000)",
+                     fontsize=12, y=1.01)
+        out_cmp7 = PLOTS_DIR / "task7_grid_comparison.png"
+        fig.savefig(out_cmp7, bbox_inches="tight", dpi=120)
+        plt.close(fig)
+        print(f"\n  → Comparison grid saved: study_plots/task7_grid_comparison.png")
 
     # ── Plot 7 ─────────────────────────────────────────────────────────────────
     grid_labels = [r[0] for r in rows]
