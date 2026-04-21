@@ -234,6 +234,35 @@ Render()
 save_img(v_s, OUT_DIR + "/final_streamlines.png")
 Delete(v_s)
 
+# B&W vector field plot ───────────────────────────────────────────────────────
+print("  Rendering B&W vector field...")
+v_bw = new_view(bg=(1.0, 1.0, 1.0))
+
+# Light-grey domain background so cavity boundary is visible
+d_bwbg = Show(calc_f, v_bw)
+d_bwbg.Representation = "Surface"
+ColorBy(d_bwbg, None)
+d_bwbg.AmbientColor = [0.93, 0.93, 0.93]
+d_bwbg.DiffuseColor = [0.93, 0.93, 0.93]
+
+# Black arrows sized by velocity magnitude, every 4th cell for readability
+glyph_bw = Glyph(Input=calc_f, GlyphType="Arrow")
+glyph_bw.OrientationArray = ["CELLS", "velocity"]
+glyph_bw.ScaleArray        = ["CELLS", "vel_mag"]
+glyph_bw.ScaleFactor       = 0.055
+glyph_bw.GlyphMode         = "Every Nth Point"
+glyph_bw.Stride            = 4
+
+d_gbw = Show(glyph_bw, v_bw)
+d_gbw.Representation = "Surface"
+ColorBy(d_gbw, None)
+d_gbw.AmbientColor = [0.0, 0.0, 0.0]
+d_gbw.DiffuseColor = [0.0, 0.0, 0.0]
+setup_camera(v_bw)
+Render()
+save_img(v_bw, OUT_DIR + "/final_vectors_bw.png")
+Delete(v_bw)
+
 Delete(calc_f); Delete(rd_f)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -276,11 +305,39 @@ for field, lut_key, title, prefix in ANIM_FIELDS:
     views_a.append((va, prefix))
     disps_a.append((da, lut_a, lut_key))
 
+# Vector animation view (arrows coloured by vel_mag on dark bg) ───────────────
+v_vec = new_view(size=(800, 700), bg=(0.12, 0.12, 0.18))
+d_vbg = Show(calc_a, v_vec)
+d_vbg.Representation = "Surface"
+ColorBy(d_vbg, ("CELLS", "vel_mag"))
+lut_vec = GetColorTransferFunction("vel_mag")
+apply_lut(lut_vec, "vel_mag")
+d_vbg.Opacity = 0.40
+
+glyph_a = Glyph(Input=calc_a, GlyphType="Arrow")
+glyph_a.OrientationArray = ["CELLS", "velocity"]
+glyph_a.ScaleArray        = ["CELLS", "vel_mag"]
+glyph_a.ScaleFactor       = 0.055
+glyph_a.GlyphMode         = "Every Nth Point"
+glyph_a.Stride            = 4
+
+d_ga = Show(glyph_a, v_vec)
+d_ga.Representation = "Surface"
+ColorBy(d_ga, ("POINTS", "vel_mag"))
+lut_ga = GetColorTransferFunction("vel_mag")
+apply_lut(lut_ga, "vel_mag")
+d_ga.SetScalarBarVisibility(v_vec, True)
+cb_vec = add_colorbar(lut_ga, v_vec, "Velocity |u|  [m/s]")
+cb_vec.TitleFontSize = 11
+cb_vec.LabelFontSize = 9
+setup_camera(v_vec)
+
 for idx, t in enumerate(times):
     anim.AnimationTime = t
     # Render once to update the pipeline to this timestep
     for va, _ in views_a:
         Render(va)
+    Render(v_vec)
     # Now save each view; rescale pressure LUT per frame AFTER the render
     for (va, prefix), (da, lut_a, lut_key) in zip(views_a, disps_a):
         if lut_key == "p_norm":
@@ -289,11 +346,15 @@ for idx, t in enumerate(times):
             Render(va)
         SaveScreenshot(f"{FRM_DIR}/{prefix}_{idx:04d}.png", va,
                        ImageResolution=[800, 700])
+    # Vector frame
+    SaveScreenshot(f"{FRM_DIR}/vec_{idx:04d}.png", v_vec,
+                   ImageResolution=[800, 700])
     if idx % 10 == 0:
         print(f"  frame {idx:03d} / {len(times)-1}")
 
 for va, _ in views_a:
     Delete(va)
+Delete(v_vec)
 Delete(calc_a); Delete(rd_a)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -302,6 +363,7 @@ print(f"""
 Final-state images saved to:
   {OUT_DIR}/final_u.png
   {OUT_DIR}/final_v.png
+  {OUT_DIR}/final_vectors_bw.png
   {OUT_DIR}/final_pressure.png
   {OUT_DIR}/final_velocity.png
   {OUT_DIR}/final_glyphs.png

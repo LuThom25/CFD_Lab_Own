@@ -24,12 +24,13 @@ FPS=10   # frames per second -> 101 frames = ~10 s video
 
 echo "=== Creating individual videos ==="
 
-for PREFIX in u v p vel; do
+for PREFIX in u v p vel vec; do
     case "$PREFIX" in
         u)   TITLE="u-Velocity (x-component)" ;;
         v)   TITLE="v-Velocity (y-component)" ;;
         p)   TITLE="Pressure (relative, per-frame rescaled)" ;;
         vel) TITLE="Velocity Magnitude |u|" ;;
+        vec) TITLE="Velocity Vectors (arrows)" ;;
     esac
 
     OUT="$VID_DIR/video_${PREFIX}.mp4"
@@ -47,7 +48,7 @@ done
 
 # ── 2x2 panel video (all four quantities simultaneously) ──────────────────────
 echo ""
-echo "=== Creating 2x2 panel video ==="
+echo "=== Creating 2x2 panel video (u, v, p, vel) ==="
 
 ffmpeg -y \
     -i "$VID_DIR/video_u.mp4" \
@@ -63,6 +64,26 @@ ffmpeg -y \
     "$VID_DIR/video_panel_2x2.mp4" 2>/dev/null
 
 [ $? -eq 0 ] && echo "    OK: $VID_DIR/video_panel_2x2.mp4" || echo "    FAILED: panel video"
+
+echo ""
+echo "=== Creating 2x3 panel video (u, v, p, vel, vec, vel) ==="
+
+ffmpeg -y \
+    -i "$VID_DIR/video_u.mp4" \
+    -i "$VID_DIR/video_v.mp4" \
+    -i "$VID_DIR/video_p.mp4" \
+    -i "$VID_DIR/video_vel.mp4" \
+    -i "$VID_DIR/video_vec.mp4" \
+    -i "$VID_DIR/video_vel.mp4" \
+    -filter_complex \
+        "[0:v][1:v][2:v]hstack=inputs=3[top];
+         [3:v][4:v][5:v]hstack=inputs=3[bot];
+         [top][bot]vstack,format=yuv420p[out]" \
+    -map "[out]" \
+    -c:v libx264 -preset slow -crf 18 \
+    "$VID_DIR/video_panel_2x3.mp4" 2>/dev/null
+
+[ $? -eq 0 ] && echo "    OK: $VID_DIR/video_panel_2x3.mp4" || echo "    FAILED: 2x3 panel video"
 
 echo ""
 echo "=== All videos in: $VID_DIR ==="
