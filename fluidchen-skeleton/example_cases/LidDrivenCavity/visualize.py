@@ -82,6 +82,7 @@ def new_view(size=(1200, 1000), bg=(0.12, 0.12, 0.18)):
     v = CreateView("RenderView")
     v.ViewSize  = list(size)
     v.Background = list(bg)
+    v.OrientationAxesVisibility = 0   # hide x/y/z corner widget
     return v
 
 def save_img(view, path):
@@ -234,30 +235,36 @@ Render()
 save_img(v_s, OUT_DIR + "/final_streamlines.png")
 Delete(v_s)
 
-# B&W vector field plot ───────────────────────────────────────────────────────
-print("  Rendering B&W vector field...")
-v_bw = new_view(bg=(1.0, 1.0, 1.0))
+# Coloured vector field plot (Jet arrows on dark background) ──────────────────
+print("  Rendering coloured vector field...")
+# Delete the StreamTracer source so its seed line cannot bleed into this view
+Delete(stream)
 
-# Light-grey domain background so cavity boundary is visible
+v_bw = new_view(bg=(0.05, 0.05, 0.10))
+
+# Faint velocity-magnitude background for spatial context
 d_bwbg = Show(calc_f, v_bw)
 d_bwbg.Representation = "Surface"
-ColorBy(d_bwbg, None)
-d_bwbg.AmbientColor = [0.93, 0.93, 0.93]
-d_bwbg.DiffuseColor = [0.93, 0.93, 0.93]
+ColorBy(d_bwbg, ("CELLS", "vel_mag"))
+lut_bwbg = GetColorTransferFunction("vel_mag")
+apply_lut(lut_bwbg, "vel_mag")
+d_bwbg.Opacity = 0.30
 
-# Black arrows sized by velocity magnitude, every 4th cell for readability
+# Arrows coloured by velocity magnitude (Jet, 0–1), every 3rd cell
 glyph_bw = Glyph(Input=calc_f, GlyphType="Arrow")
 glyph_bw.OrientationArray = ["CELLS", "velocity"]
 glyph_bw.ScaleArray        = ["CELLS", "vel_mag"]
-glyph_bw.ScaleFactor       = 0.055
+glyph_bw.ScaleFactor       = 0.060
 glyph_bw.GlyphMode         = "Every Nth Point"
-glyph_bw.Stride            = 4
+glyph_bw.Stride            = 3
 
 d_gbw = Show(glyph_bw, v_bw)
 d_gbw.Representation = "Surface"
-ColorBy(d_gbw, None)
-d_gbw.AmbientColor = [0.0, 0.0, 0.0]
-d_gbw.DiffuseColor = [0.0, 0.0, 0.0]
+ColorBy(d_gbw, ("POINTS", "vel_mag"))
+lut_bw = GetColorTransferFunction("vel_mag")
+apply_lut(lut_bw, "vel_mag")
+d_gbw.SetScalarBarVisibility(v_bw, True)
+add_colorbar(lut_bw, v_bw, "Velocity |u|  [m/s]")
 setup_camera(v_bw)
 Render()
 save_img(v_bw, OUT_DIR + "/final_vectors_bw.png")
@@ -306,20 +313,20 @@ for field, lut_key, title, prefix in ANIM_FIELDS:
     disps_a.append((da, lut_a, lut_key))
 
 # Vector animation view (arrows coloured by vel_mag on dark bg) ───────────────
-v_vec = new_view(size=(800, 700), bg=(0.12, 0.12, 0.18))
+v_vec = new_view(size=(800, 700), bg=(0.05, 0.05, 0.10))
 d_vbg = Show(calc_a, v_vec)
 d_vbg.Representation = "Surface"
 ColorBy(d_vbg, ("CELLS", "vel_mag"))
 lut_vec = GetColorTransferFunction("vel_mag")
 apply_lut(lut_vec, "vel_mag")
-d_vbg.Opacity = 0.40
+d_vbg.Opacity = 0.30
 
 glyph_a = Glyph(Input=calc_a, GlyphType="Arrow")
 glyph_a.OrientationArray = ["CELLS", "velocity"]
 glyph_a.ScaleArray        = ["CELLS", "vel_mag"]
-glyph_a.ScaleFactor       = 0.055
+glyph_a.ScaleFactor       = 0.060
 glyph_a.GlyphMode         = "Every Nth Point"
-glyph_a.Stride            = 4
+glyph_a.Stride            = 3
 
 d_ga = Show(glyph_a, v_vec)
 d_ga.Representation = "Surface"
