@@ -270,6 +270,34 @@ Render()
 save_img(v_bw, OUT_DIR + "/final_vectors_bw.png")
 Delete(v_bw)
 
+# Clean direction-only vector plot (white arrows, blue background) ─────────────
+print("  Rendering clean direction vectors (white arrows)...")
+# Calculator: constant 1.0 so every arrow has the same length (direction only)
+c_const_f = Calculator(Input=calc_f)
+c_const_f.AttributeType   = "Cell Data"
+c_const_f.ResultArrayName = "one"
+c_const_f.Function        = "1.0"
+
+v_cl = new_view(bg=(0.06, 0.10, 0.22))   # deep navy blue
+
+glyph_cl = Glyph(Input=c_const_f, GlyphType="Arrow")
+glyph_cl.OrientationArray = ["CELLS", "velocity"]
+glyph_cl.ScaleArray        = ["CELLS", "one"]
+glyph_cl.ScaleFactor       = 0.018
+glyph_cl.GlyphMode         = "Every Nth Point"
+glyph_cl.Stride            = 3
+
+d_gcl = Show(glyph_cl, v_cl)
+d_gcl.Representation = "Surface"
+ColorBy(d_gcl, None)
+d_gcl.AmbientColor = [1.0, 1.0, 1.0]
+d_gcl.DiffuseColor = [1.0, 1.0, 1.0]
+setup_camera(v_cl)
+Render()
+save_img(v_cl, OUT_DIR + "/final_vectors_clean.png")
+Delete(v_cl)
+Delete(c_const_f)
+
 Delete(calc_f); Delete(rd_f)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -339,12 +367,35 @@ cb_vec.TitleFontSize = 11
 cb_vec.LabelFontSize = 9
 setup_camera(v_vec)
 
+# Clean direction-only vector animation (white arrows, navy bg) ───────────────
+c_const_a = Calculator(Input=calc_a)
+c_const_a.AttributeType   = "Cell Data"
+c_const_a.ResultArrayName = "one"
+c_const_a.Function        = "1.0"
+
+v_vcl = new_view(size=(800, 700), bg=(0.06, 0.10, 0.22))
+
+glyph_vcl = Glyph(Input=c_const_a, GlyphType="Arrow")
+glyph_vcl.OrientationArray = ["CELLS", "velocity"]
+glyph_vcl.ScaleArray        = ["CELLS", "one"]
+glyph_vcl.ScaleFactor       = 0.018
+glyph_vcl.GlyphMode         = "Every Nth Point"
+glyph_vcl.Stride            = 3
+
+d_gvcl = Show(glyph_vcl, v_vcl)
+d_gvcl.Representation = "Surface"
+ColorBy(d_gvcl, None)
+d_gvcl.AmbientColor = [1.0, 1.0, 1.0]
+d_gvcl.DiffuseColor = [1.0, 1.0, 1.0]
+setup_camera(v_vcl)
+
 for idx, t in enumerate(times):
     anim.AnimationTime = t
     # Render once to update the pipeline to this timestep
     for va, _ in views_a:
         Render(va)
     Render(v_vec)
+    Render(v_vcl)
     # Now save each view; rescale pressure LUT per frame AFTER the render
     for (va, prefix), (da, lut_a, lut_key) in zip(views_a, disps_a):
         if lut_key == "p_norm":
@@ -353,8 +404,11 @@ for idx, t in enumerate(times):
             Render(va)
         SaveScreenshot(f"{FRM_DIR}/{prefix}_{idx:04d}.png", va,
                        ImageResolution=[800, 700])
-    # Vector frame
+    # Coloured vector frame
     SaveScreenshot(f"{FRM_DIR}/vec_{idx:04d}.png", v_vec,
+                   ImageResolution=[800, 700])
+    # Clean direction-only vector frame
+    SaveScreenshot(f"{FRM_DIR}/vec_clean_{idx:04d}.png", v_vcl,
                    ImageResolution=[800, 700])
     if idx % 10 == 0:
         print(f"  frame {idx:03d} / {len(times)-1}")
@@ -362,6 +416,8 @@ for idx, t in enumerate(times):
 for va, _ in views_a:
     Delete(va)
 Delete(v_vec)
+Delete(v_vcl)
+Delete(c_const_a)
 Delete(calc_a); Delete(rd_a)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -371,12 +427,13 @@ Final-state images saved to:
   {OUT_DIR}/final_u.png
   {OUT_DIR}/final_v.png
   {OUT_DIR}/final_vectors_bw.png
+  {OUT_DIR}/final_vectors_clean.png
   {OUT_DIR}/final_pressure.png
   {OUT_DIR}/final_velocity.png
   {OUT_DIR}/final_glyphs.png
   {OUT_DIR}/final_streamlines.png
 
-Animation frames: {FRM_DIR}/[u|v|p|vel]_NNNN.png
+Animation frames: {FRM_DIR}/[u|v|p|vel|vec|vec_clean]_NNNN.png
   ({len(times)} frames per quantity)
 
 Next step - create videos:

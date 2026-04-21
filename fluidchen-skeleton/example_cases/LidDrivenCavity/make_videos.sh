@@ -24,13 +24,14 @@ FPS=10   # frames per second -> 101 frames = ~10 s video
 
 echo "=== Creating individual videos ==="
 
-for PREFIX in u v p vel vec; do
+for PREFIX in u v p vel vec vec_clean; do
     case "$PREFIX" in
-        u)   TITLE="u-Velocity (x-component)" ;;
-        v)   TITLE="v-Velocity (y-component)" ;;
-        p)   TITLE="Pressure (relative, per-frame rescaled)" ;;
-        vel) TITLE="Velocity Magnitude |u|" ;;
-        vec) TITLE="Velocity Vectors (arrows)" ;;
+        u)         TITLE="u-Velocity (x-component)" ;;
+        v)         TITLE="v-Velocity (y-component)" ;;
+        p)         TITLE="Pressure (relative, per-frame rescaled)" ;;
+        vel)       TITLE="Velocity Magnitude |u|" ;;
+        vec)       TITLE="Velocity Vectors (Jet-coloured by magnitude)" ;;
+        vec_clean) TITLE="Velocity Vectors (direction only, white arrows)" ;;
     esac
 
     OUT="$VID_DIR/video_${PREFIX}.mp4"
@@ -46,27 +47,11 @@ for PREFIX in u v p vel vec; do
     [ $? -eq 0 ] && echo "    OK: $OUT" || echo "    FAILED: $PREFIX"
 done
 
-# ── 2x2 panel video (all four quantities simultaneously) ──────────────────────
+# ── 2x3 panel video (all 6 unique quantities) ────────────────────────────────
+# Row 1: u-velocity | v-velocity | pressure
+# Row 2: velocity magnitude | Jet-coloured vectors | direction-only vectors
 echo ""
-echo "=== Creating 2x2 panel video (u, v, p, vel) ==="
-
-ffmpeg -y \
-    -i "$VID_DIR/video_u.mp4" \
-    -i "$VID_DIR/video_v.mp4" \
-    -i "$VID_DIR/video_p.mp4" \
-    -i "$VID_DIR/video_vel.mp4" \
-    -filter_complex \
-        "[0:v][1:v]hstack[top];
-         [2:v][3:v]hstack[bot];
-         [top][bot]vstack,format=yuv420p[out]" \
-    -map "[out]" \
-    -c:v libx264 -preset slow -crf 18 \
-    "$VID_DIR/video_panel_2x2.mp4" 2>/dev/null
-
-[ $? -eq 0 ] && echo "    OK: $VID_DIR/video_panel_2x2.mp4" || echo "    FAILED: panel video"
-
-echo ""
-echo "=== Creating 2x3 panel video (u, v, p, vel, vec, vel) ==="
+echo "=== Creating 2x3 panel video (u, v, p  |  vel, vec, vec_clean) ==="
 
 ffmpeg -y \
     -i "$VID_DIR/video_u.mp4" \
@@ -74,7 +59,7 @@ ffmpeg -y \
     -i "$VID_DIR/video_p.mp4" \
     -i "$VID_DIR/video_vel.mp4" \
     -i "$VID_DIR/video_vec.mp4" \
-    -i "$VID_DIR/video_vel.mp4" \
+    -i "$VID_DIR/video_vec_clean.mp4" \
     -filter_complex \
         "[0:v][1:v][2:v]hstack=inputs=3[top];
          [3:v][4:v][5:v]hstack=inputs=3[bot];
