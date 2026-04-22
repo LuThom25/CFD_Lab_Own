@@ -185,13 +185,46 @@ The **relaxation factor** $\omega \in (0,2)$ accelerates convergence:
 
 ### 7.2 The Null-Space Problem (Pure Neumann BCs)
 
-All boundary conditions for pressure are **Neumann** (zero gradient): $\partial p / \partial n = 0$. This means the system $\mathbf{A}\mathbf{p} = \mathbf{b}$ is **singular** — pressure is only determined up to an additive constant. Consequently:
+All boundary conditions for pressure are **Neumann** (zero gradient): $\partial p / \partial n = 0$. This means the system $\mathbf{A}\mathbf{p} = \mathbf{b}$ is **singular** — pressure is only determined up to an additive constant. Two independent mechanisms prevent convergence in the naive implementation:
 
+1. **Fredholm incompatibility**: The discrete divergence $\sum \text{RS} \neq 0$ due to floating-point flux imbalances. The Fredholm alternative requires $\sum b = 0$ for a singular system $\mathbf{Ap} = \mathbf{b}$ to have *any* solution.
+2. **Null-space drift**: Even if Fix 1 holds, each SOR sweep accumulates a constant offset in $p$ along the null space. This drift prevents the residual from decaying.
+
+Without these fixes:
 - The SOR residual $\|\nabla^2 p - \text{RS}\|$ **never reaches** `eps = 0.001`
-- The solver always runs for `itermax` iterations
-- The absolute pressure value drifts linearly in time (but the **gradient** — which drives the flow — remains physically correct)
+- The solver always exhausts `itermax` iterations with avg\_res ≈ 1.2
 
-**Code:** `SOR::solve()` in `src/PressureSolver.cpp` (provided by framework).
+### 7.3 Solution: Fredholm Compatibility + Zero-Mean Projection
+
+**Fix 1 — RHS compatibility** (`Fields::calculate_rs()`, branch `ws1_further_extensions_improved_SOR`):  
+After computing all RS values, subtract the mean to enforce $\sum \text{RS} = 0$:
+```cpp
+double sum = 0.0;
+for (auto cell : cells) sum += _RS(cell->i(), cell->j());
+const double mean = sum / static_cast<double>(N);
+for (auto cell : cells) _RS(cell->i(), cell->j()) -= mean;
+```
+
+**Fix 2 — Zero-mean pressure projection** (`SOR::solve()`, after each sweep):  
+Subtract the mean pressure from all fluid cells after every SOR iteration. This projects the iterate onto the subspace orthogonal to the null space, where the Poisson operator is invertible and the residual decays geometrically:
+```cpp
+double p_sum = 0.0;
+for (auto cell : cells) p_sum += field.p(cell->i(), cell->j());
+const double p_mean = p_sum / static_cast<double>(N);
+for (auto cell : cells) field.p(cell->i(), cell->j()) -= p_mean;
+```
+
+**Result** (50×50, Re=100, $\omega=1.7$, itermax=100, $\varepsilon=10^{-3}$):
+
+| Metric | Before fix | After fix |
+|--------|-----------|-----------|
+| avg SOR iterations | 100 (always) | **4.8** |
+| avg residual | 1.230 | **3.4×10⁻³** |
+| Converges to $\varepsilon$? | Never | ✅ (steps 2 onward) |
+
+The fix is physically harmless: velocity fields depend only on pressure *gradients*, not absolute levels. The zero-mean normalization only removes the undetermined constant.
+
+**Code:** `SOR::solve()` in `src/PressureSolver.cpp`, `calculate_rs()` in `src/Fields.cpp`.
 
 ---
 
@@ -280,7 +313,7 @@ All matrices use column-major storage: `_container[num_cols * j + i]`.
 | Insight | Explanation |
 |---------|-------------|
 | **Pressure is relative** | Pure Neumann BCs → only pressure *differences* are physical. Absolute value drifts but gradients stay correct. Per-frame rescaling is necessary for meaningful visualisation. |
-| **SOR never converges to eps** | Singular system. The achieved residual within itermax iterations is the best metric for comparing omega values. |
+| **SOR fix: Fredholm + zero-mean** | Two-step fix (branch `ws1_further_extensions_improved_SOR`): (1) subtract mean RS before iteration to satisfy Fredholm compatibility; (2) subtract mean pressure after each sweep to project out null-space drift. Result: avg\_sor drops from 100 → 4.8, avg\_res from 1.23 → 3.4×10⁻³. |
 | **Viscous stability dominates** | At Re=100, $\delta t_\text{visc}=0.010 < \delta t_\text{CFL}=0.020$. Adaptive stepping automatically selects a safe margin of $\tau \cdot \delta t_\text{visc}=0.005$. |
 | **Ghost cells before F/G** | `applyVelocity()` must be called *before* `calculate_fluxes()` so that boundary-adjacent stencils access correct ghost values. |
 | **Fixed dt + fine grid = divergence** | For $\delta t=0.05$ and $\delta x < 0.05$, CFL>1. Instability grows exponentially. Use adaptive dt for all fine-grid runs. |
