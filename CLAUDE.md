@@ -25,11 +25,14 @@ CFD_Lab_Own/
         ├── make_videos.sh             ← ffmpeg video assembly
         ├── run_studies.py             ← Tasks 4–8 parameter studies
         └── LidDrivenCavity_Output/
-            ├── *.vtk                  ← simulation output
-            ├── final_*.png            ← static final-state images
-            ├── frames/                ← animation frames (u,v,p,vel,vec)
-            ├── videos/                ← MP4 videos
-            └── study_plots/           ← parameter study plots (Tasks 5–8)
+            ├── *.vtk                  ← simulation output (root level)
+            ├── task4/                 ← all Task-4 output
+            │   ├── final_u.png        ← static final-state images (u,v,p,vel,vec,vec_clean)
+            │   ├── frames/            ← animation frames (u,v,p,vel,vec,vec_clean)
+            │   └── videos/            ← 6 individual MP4s + video_panel_2x3.mp4
+            ├── study_plots/           ← parameter study plots (Tasks 5–8)
+            ├── task7_visuals/         ← Task 7 grid-refinement snapshots
+            └── task8_visuals/         ← Task 8 Re-number snapshots
 ```
 
 ### Active Branches
@@ -38,31 +41,53 @@ CFD_Lab_Own/
 | `ws1` | Core implementation (Tasks 1–4) |
 | `ws1_extensions` | Parameter studies (Tasks 5–8) + run_studies.py |
 | `ws1_further_extensions` | Vector visuals + README/Summary/Report |
+| `ws1_further_extensions_improved_SOR` | SOR convergence fix (Fredholm + zero-mean pressure) |
 
 ### Key Design Decisions
-1. **Pressure null space**: Pure Neumann BCs → singular PPE. SOR never converges to eps=0.001. Solution: per-frame pressure rescaling for visualization; avg_res metric to compare omega values.
+1. **Pressure null space — FIXED**: Pure Neumann BCs → singular PPE. Root causes: (a) Fredholm incompatibility (`Σ RS ≠ 0`) and (b) null-space drift (constant accumulates in p each sweep). Fix: subtract `mean(RS)` after `calculate_rs()` and subtract `mean(p)` after each SOR sweep. Result: avg_sor 100→4.8, avg_res 1.23→3.4×10⁻³ (converges to eps=0.001). Visualization: per-frame pressure rescaling still used.
 2. **Adaptive dt**: `tau=-1` disables adaptive stepping (used for Tasks 6 & 7 stability studies).
 3. **SUMMARY line**: Case::simulate() outputs a machine-readable `SUMMARY ...` line parsed by run_studies.py regex.
-4. **Visualization style**: Dark background (0.12/0.18), Jet colormap 0..1 for velocity, parallel camera at (0.5,0.5), 1200×1000 px.
+4. **Visualization style**: Dark background (0.12/0.18), Jet colormap 0..1 for velocity, parallel camera at (0.5,0.5), 1200×1000 px. `OrientationAxesVisibility=0` suppresses the axes widget globally.
+5. **Clean vector plot** (`vec_clean`): Uniform-length white arrows on navy background (Calculator constant=1.0 for magnitude), Stride=3, ScaleFactor=0.060. Shows direction only without Jet color overlay.
+6. **CFL marginal stability**: 32×32 at CFL=1.60 (fixed dt, t_end=5s) survives because local CFL starts at 0 and instability grows too slowly (~100 steps). 64×64 at CFL=3.2 diverges immediately. Task 7 marks marginal cases with `[marginal]` label.
+7. **openvkl warning**: `Could not find a module for device type "cpu"` is harmless — optional Intel ray-tracing library not installed; ParaView falls back gracefully.
+
+### Full Pipeline (run everything from scratch)
+```bash
+# 1. Build
+cd fluidchen-skeleton/build && make -j4
+
+# 2. Run base simulation (Task 4)
+cd ../example_cases/LidDrivenCavity
+../../build/fluidchen LidDrivenCavity.dat
+
+# 3. Visualize: static images + animation frames
+/Applications/ParaView-6.1.0.app/Contents/bin/pvpython visualize.py
+
+# 4. Assemble videos
+bash make_videos.sh
+
+# 5. Parameter studies (Tasks 5–8): runs solver + generates plots
+python3 run_studies.py          # all tasks
+python3 run_studies.py 5 6 7 8  # specific tasks
+```
 
 ### Quick Commands
 ```bash
-# Build
+# Build only
 cd fluidchen-skeleton/build && make -j4
 
-# Run simulation
-cd example_cases/LidDrivenCavity
-../../build/fluidchen LidDrivenCavity.dat
+# Run simulation only
+cd example_cases/LidDrivenCavity && ../../build/fluidchen LidDrivenCavity.dat
 
-# Visualize (ParaView)
+# Visualize (ParaView pvpython)
 /Applications/ParaView-6.1.0.app/Contents/bin/pvpython visualize.py
 
-# Make videos
+# Make videos (requires visualize.py frames first)
 bash make_videos.sh
 
-# Parameter studies (Tasks 4–8)
-python3 run_studies.py          # all tasks
-python3 run_studies.py 5 6 7 8  # specific tasks
+# Parameter studies
+python3 run_studies.py 5 6 7 8
 ```
 
 ### Physical Parameters (Base Case)
