@@ -225,7 +225,17 @@ $$\Delta t_\text{visc} = \frac{\Delta x^2}{4\nu} = \frac{(0.02)^2}{4 \times 0.01
 
 Note: $\Delta t_\text{visc} = \Delta x^2/(4\nu)$ shrinks quadratically with grid refinement. At $\nu=0.001$ (Re=1000) and $\Delta x=0.0156$ (64×64), $\Delta t_\text{visc} = (0.0156)^2/(4\times0.001) \approx 0.000061$ s — four orders of magnitude smaller than the fixed $\Delta t=0.05$.
 
-**Observation:** Only coarse grids (16×16 and 32×32) survive with $\Delta t=0.05$. Note that 32×32 survives despite CFL $> 1$ because at early times the maximum velocity is well below $U_\text{wall}$ — the CFL condition uses the instantaneous $|u|_\text{max}$, not the lid velocity. Once velocity ramps up, even the 32×32 case might diverge on longer runs.
+**Why does 32×32 survive although CFL > 1?**
+
+The CFL numbers in the table are computed using $\text{CFL} = \Delta t \cdot U_\text{wall}/\Delta x$, which treats the lid velocity $U_\text{wall} = 1$ as the maximum velocity everywhere. This is an **upper-bound estimate**, not the true local CFL at every cell:
+
+$$\text{CFL}_{i,j}^\text{true} = \frac{|u(i,j)| \cdot \Delta t}{\Delta x}$$
+
+At $t = 0$ all interior velocities are exactly zero. The flow starts from rest; momentum diffuses inward from the lid over time. For the short run $t_\text{end} = 5$ s on a coarse 32×32 grid, the interior velocity magnitude stays well below $U_\text{wall}$ throughout — so the **true local CFL remains below 1 inside the domain** even though the bound says 1.60.
+
+The CFL > 1 violation exists only at the very first row of cells directly below the moving lid (where the ghost-cell BC sets $u_\text{ghost} = 2U_\text{wall} - u_\text{interior}$, effectively seeing a velocity of order $U_\text{wall}$). The resulting local instability grows exponentially, but with a modest growth factor per step (~1.6× at CFL=1.6 vs. ~3.2× at CFL=3.2). For only 100 time steps ($t_\text{end}/\Delta t = 5/0.05$) the accumulated amplification at 32×32 is insufficient to produce visible divergence, whereas at 64×64 (CFL=3.2) the error blows up after just a few steps.
+
+**The theoretical CFL < 1 criterion is still correct.** The 32×32 result is a *marginal* case: it appears stable for $t_\text{end} = 5$ s but would likely diverge on a longer run (e.g., $t_\text{end} = 50$ s). The red dashed line at CFL = 1 in the study plot therefore marks the correct theoretical stability boundary.
 
 **Fundamental conclusion:** Halving the mesh spacing requires halving $\Delta t$ (CFL) or — more restrictively — quartering $\Delta t$ (viscous). Fixed time stepping is incompatible with grid convergence studies for explicit schemes. Adaptive time stepping ($\tau > 0$) automatically satisfies both conditions at every step regardless of mesh size.
 
