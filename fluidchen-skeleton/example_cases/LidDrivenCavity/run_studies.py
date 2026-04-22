@@ -440,11 +440,17 @@ def task5():
         rows,
     )
 
-    # Find omega with lowest residual (most effective pressure solve)
-    valid = [(r[0], float(r[3])) for r in rows if r[3] != "-"]
-    if valid:
-        best = min(valid, key=lambda x: x[1])
-        print(f"\n  → Best omega ≈ {best[0]}  (lowest avg residual = {best[1]:.3f})")
+    # With SOR fix: most omegas reach eps → rank by avg iter (speed).
+    # Prefer omegas that do NOT hit itermax; fall back to all if none qualify.
+    converged = [(r[0], float(r[1])) for r in rows if r[1] != "-" and r[2] == "no"]
+    if converged:
+        best = min(converged, key=lambda x: x[1])
+        print(f"\n  → Best omega ≈ {best[0]}  (fastest: {best[1]:.0f} avg iter, converges without hitting itermax)")
+    else:
+        valid = [(r[0], float(r[3])) for r in rows if r[3] != "-"]
+        if valid:
+            best = min(valid, key=lambda x: x[1])
+            print(f"\n  → Best omega ≈ {best[0]}  (lowest avg residual = {best[1]:.3f})")
     print()
     print("  Key insight: The pure Neumann pressure system has two convergence blockers:")
     print("  (1) Fredholm incompatibility: sum(RS) ≠ 0 → no solution exists until RS is")
@@ -454,8 +460,9 @@ def task5():
     print("  FIX applied (ws1_further_extensions_improved_SOR):")
     print("  → subtract mean(RS) before iteration  (Fredholm compatibility)")
     print("  → subtract mean(p) after each sweep   (zero-mean projection)")
-    print("  Result: avg SOR iterations drop from 100 → ~5, residual reaches eps.")
-    print("  omega<1: under-relaxation (slow).  omega≈1.5: optimal.  omega→2: diverges.")
+    print("  Result: avg SOR iterations drop from 100 → ~5 (quasi-steady), residual reaches eps.")
+    print("  omega<1: slow (under-relaxation).  omega≈1.7–1.9: fastest (fewest iter).")
+    print("  omega→2: instability — iter count rises again and may hit itermax.")
 
     # ── Plot 5a ────────────────────────────────────────────────────────────────
     omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
@@ -496,9 +503,10 @@ def task5():
         rows2,
     )
     print("\n  Note (with SOR fix applied):")
-    print("  avg_iter << itermax: SOR now converges in ~5 iterations per step.")
-    print("  Small itermax (e.g., 5) can still be sufficient with the fix applied,")
-    print("  but larger budgets provide a safety margin at higher Re or finer grids.")
+    print("  Transient phase (t≈0–10 s): SOR needs 10–70 iterations as the velocity")
+    print("  field changes rapidly → itermax=5 hits cap, ~20–30 are sufficient here.")
+    print("  Quasi-steady phase (t>>10 s): only 2–5 iterations per step needed.")
+    print("  The Task-4 avg of ~5 is dominated by the long quasi-steady tail (t=10–50 s).")
 
     # ── Plot 5b ────────────────────────────────────────────────────────────────
     im_vals  = [r[0] for r in rows2]
@@ -650,18 +658,22 @@ def task7():
     for n in grids:
         dx  = 1.0 / n
         cfl = 0.05 / dx
+        label7 = f"grid{n}"
         if cfl >= 1.0:
-            print(f"  {n}×{n}: CFL={cfl:.2f} ≥ 1  →  skipping (diverged)")
-            continue
-        label7   = f"grid{n}"
+            label7 += "_marginal"   # CFL>1 but may still run for short t_end
         case_dir = VIS7_DIR / label7
         case_dir.mkdir(exist_ok=True)
         cfg_vis  = {**BASE_CFG, "imax": n, "jmax": n,
                     "dt": 0.05, "tau": -1, "nu": 0.001, "dt_value": 0.5}
-        print(f"  Running {n}×{n} for VTK output ...", flush=True)
+        marginal = cfl >= 1.0
+        tag = f"CFL={cfl:.2f}>1 — marginal, OK for t_end=5 s only" if marginal else f"CFL={cfl:.2f}<1"
+        print(f"  Running {n}×{n} ({tag}) ...", flush=True)
         r = run_case_vtk(cfg_vis, label7, case_dir, timeout=120)
         print(f"    solver: {r['status']}", flush=True)
-        if r["status"] == "OK" and r.get("vtk_dir") and r["vtk_dir"].exists():
+        if r["status"] != "OK":
+            print(f"    → skipping render (diverged)")
+            continue
+        if r.get("vtk_dir") and r["vtk_dir"].exists():
             out_vel7    = VIS7_DIR / f"{label7}_velocity.png"
             out_stream7 = VIS7_DIR / f"{label7}_streamlines.png"
             ok = pvrender_case(r["vtk_dir"], out_vel7, out_stream7)
@@ -676,12 +688,15 @@ def task7():
         keys     = sorted(vel7_imgs.keys())
         img_rows = [[vel7_imgs.get(n),    stream7_imgs.get(n)] for n in keys]
         img_rows = list(map(list, zip(*img_rows)))  # transpose: rows=type, cols=grid
-        col_titles = [f"{n}×{n}  (dx={1/n:.4f})" for n in keys]
+        col_titles = [
+            f"{n}×{n}  (dx={1/n:.4f})" + ("  [marginal]" if 0.05/(1/n) >= 1.0 else "")
+            for n in keys
+        ]
         out_cmp7 = PLOTS_DIR / "task7_grid_comparison.png"
         sz = make_comparison_grid(
             img_rows, col_titles,
             ["Velocity magnitude", "Streamlines"],
-            "Task 7 — Stable Grids  (fixed dt=0.05, nu=0.001, Re=1000)",
+            "Task 7 — Grid Refinement  (fixed dt=0.05, nu=0.001, Re=1000)",
             out_cmp7,
         )
         print(f"\n  → Comparison grid saved: study_plots/task7_grid_comparison.png  {sz}")
@@ -752,10 +767,11 @@ def task8():
     print("    so the CFL condition dt < dx/u_max becomes the binding constraint.")
     print("  • avg_dt INCREASES with Re: high-Re flows are convection-limited, not")
     print("    viscosity-limited, and the lid velocity (~1 m/s) still allows dt~0.01.")
-    print("  • SOR converges within itermax thanks to Fredholm compatibility fix and")
-    print("    zero-mean pressure projection (ws1_further_extensions_improved_SOR).")
-    print("    Without the fix: avg residual ≈1.23, always hits itermax=100.")
-    print("    With the fix:    avg residual reaches eps, avg iter ≈5.")
+    print("  • SOR fix applied (Fredholm + zero-mean): avg iter drastically reduced.")
+    print("    Without fix: avg iter=100 (always hits cap), avg residual≈1.23.")
+    print("    With fix: avg iter=14–28 during transient (t_end=10), 2–5 at quasi-steady.")
+    print("    max_sor may still reach itermax during steep initial transient steps —")
+    print("    this is expected; increase itermax to 50 for high-Re transient accuracy.")
     print("  • At Re=10000 the flow is likely unsteady; adaptive dt keeps it stable.")
     print("    Longer t_end and finer grids are needed to resolve the turbulent regime.")
 
