@@ -28,19 +28,22 @@ import os, glob, shutil
 paraview.simple._DisableFirstRenderCameraReset()
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE    = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = BASE + "/LidDrivenCavity_Output"
-FRM_DIR = OUT_DIR + "/frames"
-VID_DIR = OUT_DIR + "/videos"
+BASE      = os.path.dirname(os.path.abspath(__file__))
+OUT_DIR   = BASE + "/LidDrivenCavity_Output"   # VTK files live here
+TASK4_DIR = OUT_DIR + "/task4"                  # all Task-4 output goes here
+FRM_DIR   = TASK4_DIR + "/frames"
+VID_DIR   = TASK4_DIR + "/videos"
 
-# ── Clean up old results so nothing from a previous run survives ──────────────
-# Delete EVERYTHING in OUT_DIR except the simulation VTK files.
-# This catches stale folders like "frames 2", "videos 2", "screenshots", etc.
-print("Cleaning up old results...")
+# ── Clean up old Task-4 output so nothing from a previous run survives ────────
+# Only wipe task4/ (and any stale top-level non-VTK files); preserve study
+# outputs (study_plots/, task7_visuals/, task8_visuals/) created by run_studies.py
+print("Cleaning up old Task-4 results...")
 if os.path.isdir(OUT_DIR):
     for item in os.listdir(OUT_DIR):
         if item.endswith(".vtk"):
             continue                          # keep simulation output
+        if item in ("study_plots", "task7_visuals", "task8_visuals"):
+            continue                          # keep parameter-study outputs
         item_path = os.path.join(OUT_DIR, item)
         if os.path.isdir(item_path):
             shutil.rmtree(item_path)
@@ -51,9 +54,7 @@ if os.path.isdir(OUT_DIR):
 os.makedirs(FRM_DIR, exist_ok=True)
 os.makedirs(VID_DIR, exist_ok=True)
 
-# Extra pass: macOS iCloud can re-sync stale files (e.g. "u_0031 2.png") back
-# into freshly created directories between shutil.rmtree and here.
-# Wipe every file that survived or was re-synced into these directories.
+# Extra pass: macOS iCloud can re-sync stale files back into fresh directories.
 for _dir in (FRM_DIR, VID_DIR):
     for _f in glob.glob(_dir + "/*"):
         os.remove(_f)
@@ -171,7 +172,7 @@ for field, lut_key, title, fname in STATIC_FIELDS:
     add_colorbar(lut, v, title)
     setup_camera(v)
     Render()
-    save_img(v, OUT_DIR + "/" + fname)
+    save_img(v, TASK4_DIR + "/" + fname)
     Delete(v)
 
 # Glyphs (velocity arrows) ────────────────────────────────────────────────────
@@ -200,7 +201,7 @@ d_gl.SetScalarBarVisibility(v_g, True)
 add_colorbar(lut_gl, v_g, "Velocity |u|  [m/s]")
 setup_camera(v_g)
 Render()
-save_img(v_g, OUT_DIR + "/final_glyphs.png")
+save_img(v_g, TASK4_DIR + "/final_glyphs.png")
 Delete(v_g)
 
 # Streamlines ─────────────────────────────────────────────────────────────────
@@ -232,7 +233,7 @@ d_st.SetScalarBarVisibility(v_s, True)
 add_colorbar(lut_st, v_s, "Velocity |u|  [m/s]")
 setup_camera(v_s)
 Render()
-save_img(v_s, OUT_DIR + "/final_streamlines.png")
+save_img(v_s, TASK4_DIR + "/final_streamlines.png")
 Delete(v_s)
 
 # Coloured vector field plot (Jet arrows on dark background) ──────────────────
@@ -267,7 +268,7 @@ d_gbw.SetScalarBarVisibility(v_bw, True)
 add_colorbar(lut_bw, v_bw, "Velocity |u|  [m/s]")
 setup_camera(v_bw)
 Render()
-save_img(v_bw, OUT_DIR + "/final_vectors_bw.png")
+save_img(v_bw, TASK4_DIR + "/final_vectors_bw.png")
 Delete(v_bw)
 
 # Clean direction-only vector plot (white arrows, blue background) ─────────────
@@ -294,7 +295,7 @@ d_gcl.AmbientColor = [1.0, 1.0, 1.0]
 d_gcl.DiffuseColor = [1.0, 1.0, 1.0]
 setup_camera(v_cl)
 Render()
-save_img(v_cl, OUT_DIR + "/final_vectors_clean.png")
+save_img(v_cl, TASK4_DIR + "/final_vectors_clean.png")
 Delete(v_cl)
 Delete(c_const_f)
 
@@ -423,19 +424,16 @@ Delete(calc_a); Delete(rd_a)
 # ══════════════════════════════════════════════════════════════════════════════
 print(f"""
 === DONE ===
-Final-state images saved to:
-  {OUT_DIR}/final_u.png
-  {OUT_DIR}/final_v.png
-  {OUT_DIR}/final_vectors_bw.png
-  {OUT_DIR}/final_vectors_clean.png
-  {OUT_DIR}/final_pressure.png
-  {OUT_DIR}/final_velocity.png
-  {OUT_DIR}/final_glyphs.png
-  {OUT_DIR}/final_streamlines.png
+All Task-4 output saved to: {TASK4_DIR}/
 
-Animation frames: {FRM_DIR}/[u|v|p|vel|vec|vec_clean]_NNNN.png
-  ({len(times)} frames per quantity)
+  Static images:
+    final_u.png  final_v.png  final_pressure.png  final_velocity.png
+    final_glyphs.png  final_streamlines.png
+    final_vectors_bw.png  final_vectors_clean.png
+
+  Animation frames: task4/frames/[u|v|p|vel|vec|vec_clean]_NNNN.png
+    ({len(times)} frames per quantity)
 
 Next step - create videos:
-  bash make_videos.sh
+  bash make_videos.sh   →  saves to task4/videos/
 """)

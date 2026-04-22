@@ -6,15 +6,14 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT_DIR="$SCRIPT_DIR/LidDrivenCavity_Output"
-FRM_DIR="$OUT_DIR/frames"
-VID_DIR="$OUT_DIR/videos"
+TASK4_DIR="$OUT_DIR/task4"
+FRM_DIR="$TASK4_DIR/frames"
+VID_DIR="$TASK4_DIR/videos"
 
 # Remove old videos so nothing from a previous run survives
-# Use both rm -rf on the directory AND a glob delete to catch any macOS-synced
-# duplicates with spaces in their names (e.g. "video_u 3.mp4").
 if [ -d "$VID_DIR" ]; then
     rm -rf "$VID_DIR"
-    echo "Removed old videos/"
+    echo "Removed old task4/videos/"
 fi
 mkdir -p "$VID_DIR"
 # Extra safety: remove any stray .mp4 files macOS may have re-synced back
