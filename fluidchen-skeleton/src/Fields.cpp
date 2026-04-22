@@ -53,6 +53,17 @@ void Fields::calculate_rs(Grid &grid) {
           + (_G(i, j) - _G(i, j - 1)) / grid.dy()
         );
     }
+
+    // Fredholm compatibility condition: for the all-Neumann Poisson system (singular)
+    // to have a solution, the RHS must satisfy Σ RS = 0 (Fredholm alternative).
+    // Subtract the mean to enforce this, correcting any residual flux imbalance.
+    const auto &cells = grid.fluid_cells();
+    const std::size_t N = cells.size();
+    if (N == 0) return;
+    double sum = 0.0;
+    for (auto cell : cells) sum += _RS(cell->i(), cell->j());
+    const double mean = sum / static_cast<double>(N);
+    for (auto cell : cells) _RS(cell->i(), cell->j()) -= mean;
 }
 
 void Fields::calculate_velocities(Grid &grid) {
