@@ -48,7 +48,7 @@ CFD_Lab_Own/
 2. **Adaptive dt**: `tau=-1` disables adaptive stepping (used for Tasks 6 & 7 stability studies).
 3. **SUMMARY line**: Case::simulate() outputs a machine-readable `SUMMARY ...` line parsed by run_studies.py regex.
 4. **Visualization style**: Dark background (0.12/0.18), Jet colormap 0..1 for velocity, parallel camera at (0.5,0.5), 1200×1000 px. `OrientationAxesVisibility=0` suppresses the axes widget globally.
-5. **Clean vector plot** (`vec_clean`): Uniform-length white arrows on navy background (Calculator constant=1.0 for magnitude), Stride=3, ScaleFactor=0.060. Shows direction only without Jet color overlay.
+5. **Clean vector plot** (`vec_clean`): Uniform-length white arrows on navy background (Calculator constant=1.0 for magnitude), Stride=3, ScaleFactor=0.018. Shows direction only without Jet color overlay.
 6. **CFL marginal stability**: 32×32 at CFL=1.60 (fixed dt, t_end=5s) survives because local CFL starts at 0 and instability grows too slowly (~100 steps). 64×64 at CFL=3.2 diverges immediately. Task 7 marks marginal cases with `[marginal]` label.
 7. **openvkl warning**: `Could not find a module for device type "cpu"` is harmless — optional Intel ray-tracing library not installed; ParaView falls back gracefully.
 

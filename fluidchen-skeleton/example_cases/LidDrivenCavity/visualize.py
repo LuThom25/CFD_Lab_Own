@@ -8,12 +8,15 @@ Produces (as required by worksheet Section 5/6):
     final_v.png           - v-velocity component   (Blue to Red, fixed range)
     final_pressure.png    - pressure relative to mean (Cool to Warm, auto)
     final_velocity.png    - velocity magnitude |u| (Jet, 0..1)
-    final_glyphs.png      - velocity arrows via Glyph filter
-    final_streamlines.png - streamlines via StreamTracer
+    final_glyphs.png        - velocity arrows via Glyph filter
+    final_streamlines.png   - streamlines via StreamTracer
+    final_vectors_bw.png    - Jet-coloured vectors, dark background
+    final_vectors_clean.png - direction-only white arrows, navy background
 
   Animation frames (one PNG per timestep):
     frames/u_NNNN.png   frames/v_NNNN.png
     frames/p_NNNN.png   frames/vel_NNNN.png
+    frames/vec_NNNN.png frames/vec_clean_NNNN.png
 
 Note on pressure: the PPE with pure Neumann BCs has no unique absolute
 pressure level (null space). The absolute value drifts linearly over time,
