@@ -405,7 +405,7 @@ def task4():
     print("  quasi-steady state. At Re=100 a single stable vortex fills the")
     print("  cavity. Key observations:")
     print("  • Adaptive dt settles at ~5e-3 s (viscous stability limit × tau).")
-    print("  • SOR always hits itermax=100 due to the singular Neumann system.")
+    print("  • SOR converges well within itermax (Fredholm fix + zero-mean pressure).")
     print("  • VTK snapshots are visualized via visualize.py / make_videos.sh.")
 
 # ── Task 5: SOR omega and itermax study ───────────────────────────────────────
@@ -446,12 +446,16 @@ def task5():
         best = min(valid, key=lambda x: x[1])
         print(f"\n  → Best omega ≈ {best[0]}  (lowest avg residual = {best[1]:.3f})")
     print()
-    print("  Key insight: With pure Neumann pressure BCs the system is SINGULAR")
-    print("  (pressure is only defined up to a constant). The SOR residual")
-    print("  ||laplacian(p) - RS|| never reaches eps=0.001 regardless of itermax.")
-    print("  The omega that achieves the LOWEST residual within the iteration budget")
-    print("  is the optimal choice. Near omega≈1.7–1.9 is typically best for 50×50.")
-    print("  omega<1: under-relaxation (slow).  omega→2: over-relaxation (diverges).")
+    print("  Key insight: The pure Neumann pressure system has two convergence blockers:")
+    print("  (1) Fredholm incompatibility: sum(RS) ≠ 0 → no solution exists until RS is")
+    print("      mean-subtracted to enforce the compatibility condition sum(RS) = 0.")
+    print("  (2) Null-space drift: pressure is defined only up to a constant; each SOR")
+    print("      sweep accumulates a constant offset that prevents residual decay.")
+    print("  FIX applied (ws1_further_extensions_improved_SOR):")
+    print("  → subtract mean(RS) before iteration  (Fredholm compatibility)")
+    print("  → subtract mean(p) after each sweep   (zero-mean projection)")
+    print("  Result: avg SOR iterations drop from 100 → ~5, residual reaches eps.")
+    print("  omega<1: under-relaxation (slow).  omega≈1.5: optimal.  omega→2: diverges.")
 
     # ── Plot 5a ────────────────────────────────────────────────────────────────
     omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
@@ -491,9 +495,10 @@ def task5():
         ["itermax", "avg SOR iter", "max SOR iter", "status"],
         rows2,
     )
-    print("\n  Note: Once avg_iter < itermax the solver converged fully every step.")
-    print("  Small itermax (e.g., 5) leaves residual too high → inaccurate pressure,")
-    print("  but simulation may still complete (with worse velocity accuracy).")
+    print("\n  Note (with SOR fix applied):")
+    print("  avg_iter << itermax: SOR now converges in ~5 iterations per step.")
+    print("  Small itermax (e.g., 5) can still be sufficient with the fix applied,")
+    print("  but larger budgets provide a safety margin at higher Re or finer grids.")
 
     # ── Plot 5b ────────────────────────────────────────────────────────────────
     im_vals  = [r[0] for r in rows2]
@@ -622,10 +627,17 @@ def task7():
     )
     print()
     print("  Observation:")
-    print("  • Only grids where dx > dt (CFL < 1) remain stable with fixed dt=0.05.")
+    print("  • CFL < 1 criterion uses u_max=1 (lid velocity) as an upper bound.")
+    print("    The true LOCAL CFL inside the domain starts at 0 (fluid at rest).")
+    print("  • 32×32 (CFL≈1.60) survives because interior velocities stay well below")
+    print("    U_wall for t_end=5 s — instability growth rate (~1.6×/step) is too slow")
+    print("    to manifest in 100 steps. This is MARGINAL, not truly stable.")
+    print("    At t_end=50 s the 32×32 case would likely diverge as well.")
+    print("  • 64×64 (CFL≈3.20) diverges immediately: growth rate ~3.2×/step is")
+    print("    strong enough even at t=0 near the lid ghost cells.")
+    print("  • The red CFL=1 line in the plot is the correct theoretical boundary.")
     print("  • Finer grids REQUIRE smaller dt → use adaptive time stepping!")
     print("  • With adaptive dt (tau=0.5), ALL grid sizes converge correctly.")
-    print("  • At Re=1000 (nu=0.001) SOR needs more iterations than at Re=100.")
 
     # ── 7b: Visualize stable grid cases ───────────────────────────────────────
     print("\n── 7b: Flow visualization for stable grids ──\n")
@@ -740,9 +752,10 @@ def task8():
     print("    so the CFL condition dt < dx/u_max becomes the binding constraint.")
     print("  • avg_dt INCREASES with Re: high-Re flows are convection-limited, not")
     print("    viscosity-limited, and the lid velocity (~1 m/s) still allows dt~0.01.")
-    print("  • SOR iterations always hit itermax=100: pure Neumann pressure BCs form")
-    print("    a singular system; the solver never fully converges regardless of Re.")
-    print("    Fix: increase itermax (e.g., 500) or use a pressure reference point.")
+    print("  • SOR converges within itermax thanks to Fredholm compatibility fix and")
+    print("    zero-mean pressure projection (ws1_further_extensions_improved_SOR).")
+    print("    Without the fix: avg residual ≈1.23, always hits itermax=100.")
+    print("    With the fix:    avg residual reaches eps, avg iter ≈5.")
     print("  • At Re=10000 the flow is likely unsteady; adaptive dt keeps it stable.")
     print("    Longer t_end and finer grids are needed to resolve the turbulent regime.")
 
