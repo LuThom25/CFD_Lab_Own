@@ -312,7 +312,7 @@ All matrices use column-major storage: `_container[num_cols * j + i]`.
 
 | Insight | Explanation |
 |---------|-------------|
-| **Pressure is relative** | Pure Neumann BCs → only pressure *differences* are physical. Absolute value drifts but gradients stay correct. Per-frame rescaling is necessary for meaningful visualisation. |
+| **Pressure is relative** | Pure Neumann BCs → only pressure *differences* are physical. With the zero-mean fix the absolute level is pinned to zero mean each sweep (no drift). Per-frame rescaling is still used in visualisation to span the full gradient range. |
 | **SOR fix: Fredholm + zero-mean** | Two-step fix (branch `ws1_further_extensions_improved_SOR`): (1) subtract mean RS before iteration to satisfy Fredholm compatibility; (2) subtract mean pressure after each sweep to project out null-space drift. Result: avg\_sor drops from 100 → 4.8, avg\_res from 1.23 → 3.4×10⁻³. |
 | **Viscous stability dominates** | At Re=100, $\delta t_\text{visc}=0.010 < \delta t_\text{CFL}=0.020$. Adaptive stepping automatically selects a safe margin of $\tau \cdot \delta t_\text{visc}=0.005$. |
 | **Ghost cells before F/G** | `applyVelocity()` must be called *before* `calculate_fluxes()` so that boundary-adjacent stencils access correct ghost values. |

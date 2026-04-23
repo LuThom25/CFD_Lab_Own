@@ -19,10 +19,11 @@ Produces (as required by worksheet Section 5/6):
     frames/vec_NNNN.png frames/vec_clean_NNNN.png
 
 Note on pressure: the PPE with pure Neumann BCs has no unique absolute
-pressure level (null space). The absolute value drifts linearly over time,
-but the pressure GRADIENT (range ~2.2 Pa throughout) is physically correct.
-All pressure visualizations subtract the frame mean so the color range
-always reflects the physically meaningful variation.
+pressure level (null space). With the Fredholm + zero-mean fix applied
+(branch ws1_further_extensions_improved_SOR), the absolute level no longer
+drifts — it is pinned to zero mean after every SOR sweep. Pressure is still
+visualised with per-frame auto-scaling so the colour range always spans the
+physically meaningful gradient variation (~2.2 Pa at Re=100).
 """
 
 from paraview.simple import *
@@ -99,7 +100,7 @@ CMAPS = {
     "u_comp"   : ("Blue to Red Rainbow", (-0.5,  1.0)),
     # v: symmetric recirculation, v_max ≈ ±0.18 (Ghia 1982, Re=100) → ±0.25 fills colormap well
     "v_comp"   : ("Blue to Red Rainbow", (-0.25, 0.25)),
-    # pressure: pure Neumann → absolute level drifts; rescale per-frame to show gradient
+    # pressure: zero-mean fix pins absolute level; per-frame rescale shows full gradient range
     "p_norm"   : ("Cool to Warm",         None),        # auto per-frame
     # velocity magnitude: bounded by lid speed U_wall = 1.0
     "vel_mag"  : ("Jet",                 ( 0.0,  1.0)),
@@ -306,8 +307,8 @@ Delete(calc_f); Delete(rd_f)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PART 2 - Animation frames for all timesteps
-# Key fix: pressure colormap is rescaled PER FRAME (not globally),
-# avoiding the "all blue" issue caused by absolute pressure drift.
+# Pressure colormap is rescaled PER FRAME (not globally) to always show
+# the full gradient range. The zero-mean SOR fix prevents absolute drift.
 # ══════════════════════════════════════════════════════════════════════════════
 print("\n--- PART 2: Animation frames (all timesteps) ---")
 
