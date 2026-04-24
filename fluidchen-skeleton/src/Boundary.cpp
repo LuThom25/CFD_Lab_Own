@@ -2,7 +2,7 @@
 
 Boundary::Boundary(std::vector<Cell *> cells) : _cells(cells) {}
 
-void Boundary::applyFlux(Fields &field) {}
+void Boundary::applyFlux(Fields & /*field*/) {}
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : Boundary(cells) {}
 

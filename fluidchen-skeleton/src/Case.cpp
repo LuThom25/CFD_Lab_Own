@@ -21,7 +21,7 @@ namespace filesystem = std::filesystem;
 #include "Case.hpp"
 #include "Enums.hpp"
 
-Case::Case(std::string file_name, int argn, char **args) {
+Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
