@@ -42,12 +42,19 @@ Case::Case(std::string file_name, int argn, char **args) {
     int itermax{};    /* max. number of iterations for pressure per time step */
     double eps{};     /* accuracy bound for pressure*/
 
-    if (file.is_open()) {
+    // R1: fail fast if the input file cannot be opened.
+    if (!file.is_open()) {
+        std::cerr << "Error: could not open input file '" << file_name << "'.\n";
+        std::exit(1);
+    }
 
+    {
         std::string var;
         while (!file.eof() && file.good()) {
             file >> var;
-            if (var[0] == '#') { /* ignore comment line*/
+            // R1: guard against empty token (e.g. trailing whitespace at EOF).
+            if (var.empty()) continue;
+            if (var[0] == '#') { /* ignore comment line */
                 file.ignore(MAX_LINE_LENGTH, '\n');
             } else {
                 if (var == "xlength") file >> xlength;
@@ -72,6 +79,17 @@ Case::Case(std::string file_name, int argn, char **args) {
         }
     }
     file.close();
+
+    // R1: validate that all required physical parameters were actually set and
+    //     are physically meaningful — catch missing/misspelled keys early.
+    if (nu <= 0.0)        { std::cerr << "Error: nu must be > 0 (got "      << nu      << ").\n"; std::exit(1); }
+    if (imax <= 0)        { std::cerr << "Error: imax must be > 0 (got "    << imax    << ").\n"; std::exit(1); }
+    if (jmax <= 0)        { std::cerr << "Error: jmax must be > 0 (got "    << jmax    << ").\n"; std::exit(1); }
+    if (xlength <= 0.0)   { std::cerr << "Error: xlength must be > 0 (got " << xlength << ").\n"; std::exit(1); }
+    if (ylength <= 0.0)   { std::cerr << "Error: ylength must be > 0 (got " << ylength << ").\n"; std::exit(1); }
+    if (_t_end  <= 0.0)   { std::cerr << "Error: t_end must be > 0 (got "   << _t_end  << ").\n"; std::exit(1); }
+    if (eps     <= 0.0)   { std::cerr << "Error: eps must be > 0 (got "     << eps     << ").\n"; std::exit(1); }
+    if (itermax <= 0)     { std::cerr << "Error: itermax must be > 0 (got " << itermax << ").\n"; std::exit(1); }
 
     std::map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
@@ -111,44 +129,30 @@ Case::Case(std::string file_name, int argn, char **args) {
 }
 
 void Case::set_file_names(std::string file_name) {
-    std::string temp_dir;
-    bool case_name_flag = true;
-    bool prefix_flag = false;
+    // CQ2: use std::filesystem::path for portable, readable path decomposition
+    //      instead of the previous manual character-by-character reverse loop.
+    filesystem::path fp(file_name);
 
-    for (int i = file_name.size() - 1; i > -1; --i) {
-        if (file_name[i] == '/') {
-            case_name_flag = false;
-            prefix_flag = true;
-        }
-        if (case_name_flag) {
-            _case_name.push_back(file_name[i]);
-        }
-        if (prefix_flag) {
-            _prefix.push_back(file_name[i]);
-        }
-    }
+    // Stem = filename without extension, e.g. "LidDrivenCavity"
+    _case_name = fp.stem().string();
 
-    for (int i = file_name.size() - _case_name.size() - 1; i > -1; --i) {
-        temp_dir.push_back(file_name[i]);
-    }
+    // Parent directory + trailing separator, e.g. "../../example_cases/LidDrivenCavity/"
+    // Used to resolve a relative geometry file path supplied in the .dat file.
+    _prefix = fp.parent_path().string();
+    if (!_prefix.empty()) _prefix += '/';
 
-    std::reverse(_case_name.begin(), _case_name.end());
-    std::reverse(_prefix.begin(), _prefix.end());
-    std::reverse(temp_dir.begin(), temp_dir.end());
+    // Output directory: <parent>/<case_name>_Output
+    filesystem::path output_dir = fp.parent_path() / (_case_name + "_Output");
+    _dict_name = output_dir.string();
 
-    _case_name.erase(_case_name.size() - 4);
-    _dict_name = temp_dir;
-    _dict_name.append(_case_name);
-    _dict_name.append("_Output");
-
+    // Prepend parent directory to geometry file path if one was specified.
     if (_geom_name.compare("NONE") != 0) {
         _geom_name = _prefix + _geom_name;
     }
 
     // Create output directory
-    filesystem::path folder(_dict_name);
     try {
-        filesystem::create_directory(folder);
+        filesystem::create_directory(output_dir);
     } catch (const std::exception &e) {
         std::cerr << "Output directory could not be created." << std::endl;
         std::cerr << "Make sure that you have write permissions to the "
@@ -414,6 +418,14 @@ void Case::output_vtk(int timestep, int my_rank) {
     writer->SetFileName(outputname.c_str());
     writer->SetInputData(structuredGrid);
     writer->Write();
+
+    // R3: verify the file was actually created — catches silent failures due to
+    //     disk-full conditions or permission errors (vtkStructuredGridWriter
+    //     returns void and does not throw on failure).
+    if (!filesystem::exists(outputname)) {
+        std::cerr << "Warning: VTK output file was not created: " << outputname << "\n"
+                  << "         Check available disk space and write permissions.\n";
+    }
 }
 
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain) {
