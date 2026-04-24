@@ -30,8 +30,9 @@ from PIL import Image, ImageDraw, ImageFont
 SCRIPT_DIR = Path(__file__).parent.resolve()
 BINARY     = SCRIPT_DIR.parent.parent / "build" / "fluidchen"
 
-# pvpython for ParaView rendering
+# pvpython for ParaView rendering — check all installed versions
 _PV_CANDIDATES = [
+    Path("/Applications/ParaView-6.0.1.app/Contents/bin/pvpython"),
     Path("/Applications/ParaView-6.1.0.app/Contents/bin/pvpython"),
     Path("/usr/local/bin/pvpython"),
     Path("/usr/bin/pvpython"),
