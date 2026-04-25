@@ -265,6 +265,7 @@ void Case::simulate() {
 
         // Divergence check — NaN/Inf residual or runaway values signal instability
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
+            ++timestep;  // count this step so avg_sor = total_iter / total_steps is bounded by itermax
             std::cout
                 << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t
                 << "  step=" << timestep
