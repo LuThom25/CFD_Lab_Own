@@ -521,6 +521,16 @@ def task5():
     print("  The Task-4 avg of ~5 is dominated by the long quasi-steady tail (t=10–50 s).")
     print("  Low itermax → SOR aborts early → avg residual stays above eps=0.001 →")
     print("  pressure correction is less accurate → small errors accumulate in velocity.")
+    print()
+    print("  Why avg_res > ε is NOT a problem in practice (Task 4 base case):")
+    print("  The average is computed over ALL time steps, including the transient phase")
+    print("  (t ≈ 0–10 s, ~2 000 steps) where the pressure field changes rapidly and")
+    print("  SOR needs 10–70 iterations — often hitting itermax before reaching ε.")
+    print("  In the quasi-steady phase (t > 10 s, ~8 000 steps of the 10 001 total)")
+    print("  only 2–5 iterations are needed and ε IS reached every single step.")
+    print("  The long quasi-steady tail dominates the avg_sor (→ 4.8) but the")
+    print("  transient outliers pull avg_res slightly above ε (→ 0.003 > 0.001).")
+    print("  This is physically correct and expected — no cause for concern.")
 
     # ── Plot 5b: two side-by-side subplots ────────────────────────────────────
     im_vals   = [r[0] for r in rows2]
@@ -549,14 +559,6 @@ def task5():
     ax2.set_ylim(3e-4, max(res_vals) * 12)  # explicit headroom so labels never clip
     for x, v in zip([str(v) for v in im_vals], res_vals):
         ax2.text(x, v * 2.0, f"{v:.4f}", ha="center", va="bottom", fontsize=8)
-    # Explanatory note: why avg_res > ε is not a problem
-    ax2.text(0.97, 0.97,
-             "avg_res > ε is dominated\nby the transient phase\n"
-             "(first ~2 000 steps, t < 10 s).\n"
-             "In quasi-steady state\n(t > 10 s, ~8 000 steps)\nε IS reached every step.",
-             transform=ax2.transAxes, ha="right", va="top", fontsize=7.5,
-             bbox=dict(boxstyle="round,pad=0.35", facecolor="lightyellow",
-                       edgecolor="grey", alpha=0.9))
     ax2.set_xlabel("itermax")
     ax2.set_ylabel("Avg SOR residual  [log scale]")
     ax2.set_title("Residual vs. itermax\n(accuracy — log scale)")
