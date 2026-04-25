@@ -542,15 +542,17 @@ def task5():
     # Left: avg SOR iterations used vs itermax (efficiency)
     bars5b_1 = ax1.bar([str(v) for v in im_vals], iter_vals, color="tab:orange",
                        edgecolor="black", linewidth=0.6)
-    ax1.plot([str(v) for v in im_vals], im_vals, "k--o", markersize=5,
-             label="itermax limit")
+    # dashed reference: quasi-steady floor (~2–5 iter); marks where SOR is no longer the bottleneck
+    ax1.axhline(32, color="steelblue", linewidth=1.3, linestyle="--",
+                label="~32 iter  (base-case avg, ω=1.7)")
+    ax1.set_ylim(0, max(iter_vals) * 1.3)
     for bar in bars5b_1:
-        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.4,
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(iter_vals) * 0.02,
                  f"{bar.get_height():.1f}", ha="center", va="bottom", fontsize=8)
     ax1.set_xlabel("itermax")
     ax1.set_ylabel("Avg SOR iterations used")
     ax1.set_title("Iterations used vs. itermax\n(efficiency)")
-    ax1.legend()
+    ax1.legend(fontsize=8)
 
     # Right: avg SOR residual vs itermax (accuracy)
     ax2.bar([str(v) for v in im_vals], res_vals, color="tab:red",
@@ -639,12 +641,13 @@ def task6():
     b_cfl  = ax2.bar([i - w/2 for i in x], cfl_vals,  width=w, label="CFL = dt/dx",  color="tab:blue",   edgecolor="black", linewidth=0.5)
     b_visc = ax2.bar([i + w/2 for i in x], visc_vals, width=w, label="dt/dt_visc",   color="tab:orange", edgecolor="black", linewidth=0.5)
     ax2.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="limit = 1")
+    ax2.set_ylim(0, max(max(cfl_vals), max(visc_vals)) * 1.22)
     # Value labels above each bar
     for bar in b_cfl:
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.04,
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(visc_vals) * 0.02,
                  f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=7, color="tab:blue")
     for bar in b_visc:
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.04,
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(visc_vals) * 0.02,
                  f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=7, color="tab:orange")
     ax2.set_xticks(list(x))
     ax2.set_xticklabels([str(d) for d in dt_vals], rotation=45)
@@ -766,8 +769,9 @@ def task7():
 
     bars7_1 = ax1.bar(grid_labels, cfl_vals7, color=bar_colors7, edgecolor="black", linewidth=0.6)
     ax1.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="CFL limit = 1")
+    ax1.set_ylim(0, max(cfl_vals7) * 1.2)
     for bar in bars7_1:
-        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.04,
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(cfl_vals7) * 0.02,
                  f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8)
     ax1.set_xlabel("Grid resolution")
     ax1.set_ylabel("CFL ≈ dt / dx")
