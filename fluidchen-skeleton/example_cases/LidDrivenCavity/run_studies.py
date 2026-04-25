@@ -468,7 +468,14 @@ def task5():
     # ── Plot 5a ────────────────────────────────────────────────────────────────
     omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
     res_vals = [float(r[3]) for r in rows if r[3] != "-"]
-    best_omg = omg_vals[res_vals.index(min(res_vals))]
+    # "Best" = fewest avg iterations among those that don't hit itermax
+    # (same criterion as the terminal printout → consistent)
+    converged_rows = [r for r in rows if r[2] == "no" and r[1] != "-"]
+    if converged_rows:
+        best_row = min(converged_rows, key=lambda r: float(r[1]))
+        best_omg = float(best_row[0])
+    else:
+        best_omg = omg_vals[res_vals.index(min(res_vals))]
     colors   = ["tab:green" if o == best_omg else "tab:blue" for o in omg_vals]
     fig, ax  = plt.subplots(figsize=(7, 4.5))
     bars = ax.bar([str(o) for o in omg_vals], res_vals,
