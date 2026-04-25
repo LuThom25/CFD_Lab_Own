@@ -542,9 +542,6 @@ def task5():
     # Left: avg SOR iterations used vs itermax (efficiency)
     bars5b_1 = ax1.bar([str(v) for v in im_vals], iter_vals, color="tab:orange",
                        edgecolor="black", linewidth=0.6)
-    # dashed reference: quasi-steady floor (~2–5 iter); marks where SOR is no longer the bottleneck
-    ax1.axhline(32, color="steelblue", linewidth=1.3, linestyle="--",
-                label="~32 iter  (base-case avg, ω=1.7)")
     ax1.set_ylim(0, max(iter_vals) * 1.3)
     for bar in bars5b_1:
         ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(iter_vals) * 0.02,
@@ -552,7 +549,6 @@ def task5():
     ax1.set_xlabel("itermax")
     ax1.set_ylabel("Avg SOR iterations used")
     ax1.set_title("Iterations used vs. itermax\n(efficiency)")
-    ax1.legend(fontsize=8)
 
     # Right: avg SOR residual vs itermax (accuracy)
     ax2.bar([str(v) for v in im_vals], res_vals, color="tab:red",
@@ -621,46 +617,49 @@ def task6():
     visc_vals= [float(r[3]) for r in rows]
     bar_colors = ["tab:green" if s == "OK" else "tab:red" for s in statuses]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
-
-    # Left: stability by dt
+    # ── Figure 6a: stability outcome ───────────────────────────────────────────
+    fig1, ax1 = plt.subplots(figsize=(7, 4))
+    green_p = mpatches.Patch(color="tab:green", label="OK (stable)")
+    red_p   = mpatches.Patch(color="tab:red",   label="DIVERGED")
     ax1.bar([str(d) for d in dt_vals], [1]*len(dt_vals),
             color=bar_colors, edgecolor="black", linewidth=0.6)
     ax1.set_xlabel("Fixed dt")
     ax1.set_ylabel("Stable / Diverged")
     ax1.set_yticks([])
-    ax1.set_title("Simulation Outcome per dt")
+    ax1.set_title("Task 6 — Simulation Outcome per dt  (50×50, nu=0.01)")
     ax1.tick_params(axis="x", rotation=45)
-    green_p = mpatches.Patch(color="tab:green", label="OK (stable)")
-    red_p   = mpatches.Patch(color="tab:red",   label="DIVERGED")
     ax1.legend(handles=[green_p, red_p])
+    fig1.tight_layout()
+    fig1.savefig(PLOTS_DIR / "task6_dt_stability.png")
+    plt.close(fig1)
+    print(f"  → Plot saved: study_plots/task6_dt_stability.png")
 
-    # Right: CFL and visc fractions
+    # ── Figure 6b: CFL and viscous stability fractions (standalone) ────────────
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
     x = range(len(dt_vals))
     w = 0.38
     b_cfl  = ax2.bar([i - w/2 for i in x], cfl_vals,  width=w, label="CFL = dt/dx",  color="tab:blue",   edgecolor="black", linewidth=0.5)
     b_visc = ax2.bar([i + w/2 for i in x], visc_vals, width=w, label="dt/dt_visc",   color="tab:orange", edgecolor="black", linewidth=0.5)
     ax2.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="limit = 1")
-    ax2.set_ylim(0, max(max(cfl_vals), max(visc_vals)) * 1.22)
-    # Value labels above each bar
+    ymax = max(max(cfl_vals), max(visc_vals)) * 1.22
+    ax2.set_ylim(0, ymax)
+    offset = ymax * 0.018
     for bar in b_cfl:
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(visc_vals) * 0.02,
-                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=7, color="tab:blue")
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + offset,
+                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8, color="tab:blue")
     for bar in b_visc:
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(visc_vals) * 0.02,
-                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=7, color="tab:orange")
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + offset,
+                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8, color="tab:orange")
     ax2.set_xticks(list(x))
     ax2.set_xticklabels([str(d) for d in dt_vals], rotation=45)
     ax2.set_xlabel("Fixed dt")
     ax2.set_ylabel("Fraction of stability limit")
-    ax2.set_title("CFL and Viscous Stability Fractions")
+    ax2.set_title("Task 6 — CFL and Viscous Stability Fractions  (50×50, nu=0.01)")
     ax2.legend(fontsize=9)
-
-    fig.suptitle("Task 6 — Fixed Time Step Stability  (50×50, nu=0.01)", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(PLOTS_DIR / "task6_dt_stability.png")
-    plt.close(fig)
-    print(f"  → Plot saved: study_plots/task6_dt_stability.png")
+    fig2.tight_layout()
+    fig2.savefig(PLOTS_DIR / "task6_dt_fractions.png")
+    plt.close(fig2)
+    print(f"  → Plot saved: study_plots/task6_dt_fractions.png")
 
 # ── Task 7: Grid refinement study ─────────────────────────────────────────────
 def task7():
@@ -775,7 +774,7 @@ def task7():
                  f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8)
     ax1.set_xlabel("Grid resolution")
     ax1.set_ylabel("CFL ≈ dt / dx")
-    ax1.set_title("CFL Number per Grid  (fixed dt=0.05)")
+    ax1.set_title("CFL Number per Grid  (fixed dt=0.05, itermax=100)")
     green_p = mpatches.Patch(color="tab:green", label="OK (stable)")
     red_p   = mpatches.Patch(color="tab:red",   label="DIVERGED")
     ax1.legend(handles=[green_p, red_p, mpatches.Patch(color="none")])
@@ -790,10 +789,10 @@ def task7():
                      f"{bar.get_height():.1f}", ha="center", va="bottom", fontsize=8)
     ax2.set_xlabel("Grid resolution")
     ax2.set_ylabel("Avg SOR iterations")
-    ax2.set_title("Avg SOR Iterations per Grid")
+    ax2.set_title("Avg SOR Iterations per Grid  (itermax=100)")
     ax2.legend(handles=[green_p, red_p])
 
-    fig.suptitle("Task 7 — Grid Refinement Study  (fixed dt=0.05, nu=0.001, Re=1000)", fontsize=12)
+    fig.suptitle("Task 7 — Grid Refinement Study  (fixed dt=0.05, nu=0.001, Re=1000, itermax=100)", fontsize=12)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task7_grid_refinement.png")
     plt.close(fig)
