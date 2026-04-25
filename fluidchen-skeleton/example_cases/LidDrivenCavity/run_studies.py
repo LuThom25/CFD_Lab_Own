@@ -643,12 +643,19 @@ def task6():
     ax2.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="limit = 1")
     ymax = max(max(cfl_vals), max(visc_vals)) * 1.22
     ax2.set_ylim(0, ymax)
-    offset = ymax * 0.018
+    offset    = ymax * 0.018
+    clearance = ymax * 0.07   # minimum gap above the red limit line at y=1
+    def _label_y(h):
+        """Place label above bar, but never inside the red limit-line band."""
+        y = h + offset
+        if h > 0.5 and y < 1.0 + clearance:   # bar is near the limit line
+            y = 1.0 + clearance
+        return y
     for bar in b_cfl:
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + offset,
+        ax2.text(bar.get_x() + bar.get_width()/2, _label_y(bar.get_height()),
                  f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8, color="tab:blue")
     for bar in b_visc:
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + offset,
+        ax2.text(bar.get_x() + bar.get_width()/2, _label_y(bar.get_height()),
                  f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8, color="tab:orange")
     ax2.set_xticks(list(x))
     ax2.set_xticklabels([str(d) for d in dt_vals], rotation=45)
