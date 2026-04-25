@@ -534,9 +534,13 @@ def task5():
             edgecolor="black", linewidth=0.6)
     ax2.axhline(0.001, color="green", linewidth=1.5, linestyle="--",
                 label="target  ε = 0.001")
+    # Annotate each bar with its exact value
+    for x, v in zip([str(v) for v in im_vals], res_vals):
+        ax2.text(x, v * 1.15, f"{v:.4f}", ha="center", va="bottom", fontsize=8)
+    ax2.set_yscale("log")   # log scale: all values readable, ε line clearly visible
     ax2.set_xlabel("itermax")
-    ax2.set_ylabel("Avg SOR residual (lower = more accurate)")
-    ax2.set_title("Residual vs. itermax\n(accuracy)")
+    ax2.set_ylabel("Avg SOR residual  [log scale]")
+    ax2.set_title("Residual vs. itermax\n(accuracy — log scale)")
     ax2.legend()
 
     fig.suptitle("Task 5b — Effect of itermax  (ω=1.7, 50×50, Re=100)", fontsize=12)
@@ -853,19 +857,34 @@ def task8():
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
 
-    ax1.semilogx(re_vals, dt_floats, "o-", color="tab:blue",   linewidth=2, markersize=7, label="avg adaptive dt")
-    ax1.semilogx(re_vals, dt_visc_vals, "s--", color="tab:orange", linewidth=1.5, markersize=6, label="dt_visc = dx²/(4ν)")
+    x_pos = range(len(re_vals))
+    w = 0.38
+    bars1 = ax1.bar([i - w/2 for i in x_pos], dt_floats,    width=w,
+                    color="tab:blue",   edgecolor="black", linewidth=0.6, label="avg adaptive dt")
+    bars2 = ax1.bar([i + w/2 for i in x_pos], dt_visc_vals, width=w,
+                    color="tab:orange", edgecolor="black", linewidth=0.6, label="dt_visc = dx²/(4ν)")
+    # Annotate exact values above each bar
+    for bar in bars1:
+        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.0003,
+                 f"{bar.get_height():.4f}", ha="center", va="bottom", fontsize=8, color="tab:blue")
+    for bar in bars2:
+        ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.0003,
+                 f"{bar.get_height():.4f}", ha="center", va="bottom", fontsize=8, color="tab:orange")
+    ax1.set_xticks(list(x_pos))
+    ax1.set_xticklabels([str(r) for r in re_vals])
     ax1.set_xlabel("Reynolds number Re")
     ax1.set_ylabel("Time step dt  [s]")
-    ax1.set_title("Adaptive dt vs. Re")
+    ax1.set_title("Adaptive dt vs. Re\n(blue = used, orange = viscous limit)")
     ax1.legend()
-    ax1.set_xticks(re_vals)
-    ax1.set_xticklabels([str(r) for r in re_vals])
 
     sor_vals8 = [float(r[3]) if r[3] != "-" else 0 for r in rows]
-    ax2.bar([str(r) for r in re_vals], sor_vals8, color="tab:purple",
-            edgecolor="black", linewidth=0.6)
+    bars3 = ax2.bar([str(r) for r in re_vals], sor_vals8, color="tab:purple",
+                    edgecolor="black", linewidth=0.6)
     ax2.axhline(100, color="red", linewidth=1.4, linestyle="--", label="itermax = 100")
+    # Annotate exact values
+    for bar in bars3:
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                 f"{bar.get_height():.1f}", ha="center", va="bottom", fontsize=9)
     ax2.set_xlabel("Reynolds number Re")
     ax2.set_ylabel("Avg SOR iterations")
     ax2.set_title("SOR Iterations vs. Re")
