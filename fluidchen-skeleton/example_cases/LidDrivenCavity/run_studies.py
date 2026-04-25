@@ -540,10 +540,13 @@ def task5():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
 
     # Left: avg SOR iterations used vs itermax (efficiency)
-    ax1.bar([str(v) for v in im_vals], iter_vals, color="tab:orange",
-            edgecolor="black", linewidth=0.6)
+    bars5b_1 = ax1.bar([str(v) for v in im_vals], iter_vals, color="tab:orange",
+                       edgecolor="black", linewidth=0.6)
     ax1.plot([str(v) for v in im_vals], im_vals, "k--o", markersize=5,
              label="itermax limit")
+    for bar in bars5b_1:
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.4,
+                 f"{bar.get_height():.1f}", ha="center", va="bottom", fontsize=8)
     ax1.set_xlabel("itermax")
     ax1.set_ylabel("Avg SOR iterations used")
     ax1.set_title("Iterations used vs. itermax\n(efficiency)")
