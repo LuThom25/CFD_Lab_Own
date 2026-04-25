@@ -494,13 +494,14 @@ def task5():
             im,
             f"{r.get('avg_sor', '-'):.1f}" if "avg_sor" in r else "-",
             r.get("max_sor", "-"),
+            f"{r.get('avg_res', '-'):.4f}" if "avg_res" in r else "-",
             r["status"],
         ])
         print(f"  itermax={im:>3}  done  ({r['status']})", flush=True)
 
     print()
     print_table(
-        ["itermax", "avg SOR iter", "max SOR iter", "status"],
+        ["itermax", "avg SOR iter", "max SOR iter", "avg residual", "status"],
         rows2,
     )
     print("\n  Note (with SOR fix applied):")
@@ -508,19 +509,37 @@ def task5():
     print("  field changes rapidly → itermax=5 hits cap, ~20–30 are sufficient here.")
     print("  Quasi-steady phase (t>>10 s): only 2–5 iterations per step needed.")
     print("  The Task-4 avg of ~5 is dominated by the long quasi-steady tail (t=10–50 s).")
+    print("  Low itermax → SOR aborts early → avg residual stays above eps=0.001 →")
+    print("  pressure correction is less accurate → small errors accumulate in velocity.")
 
-    # ── Plot 5b ────────────────────────────────────────────────────────────────
-    im_vals  = [r[0] for r in rows2]
-    iter_vals= [float(r[1]) if r[1] != "-" else 0 for r in rows2]
-    fig, ax  = plt.subplots(figsize=(6, 4))
-    ax.bar([str(v) for v in im_vals], iter_vals, color="tab:orange",
-           edgecolor="black", linewidth=0.6)
-    ax.plot([str(v) for v in im_vals], im_vals, "k--o", markersize=5,
-            label="itermax limit")
-    ax.set_xlabel("itermax")
-    ax.set_ylabel("Avg SOR iterations used")
-    ax.set_title("Task 5b — SOR Iterations vs. itermax\n(ω=1.7, 50×50 grid, Re=100)")
-    ax.legend()
+    # ── Plot 5b: two side-by-side subplots ────────────────────────────────────
+    im_vals   = [r[0] for r in rows2]
+    iter_vals = [float(r[1]) if r[1] != "-" else 0.0 for r in rows2]
+    res_vals  = [float(r[3]) if r[3] != "-" else 0.0 for r in rows2]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+
+    # Left: avg SOR iterations used vs itermax (efficiency)
+    ax1.bar([str(v) for v in im_vals], iter_vals, color="tab:orange",
+            edgecolor="black", linewidth=0.6)
+    ax1.plot([str(v) for v in im_vals], im_vals, "k--o", markersize=5,
+             label="itermax limit")
+    ax1.set_xlabel("itermax")
+    ax1.set_ylabel("Avg SOR iterations used")
+    ax1.set_title("Iterations used vs. itermax\n(efficiency)")
+    ax1.legend()
+
+    # Right: avg SOR residual vs itermax (accuracy)
+    ax2.bar([str(v) for v in im_vals], res_vals, color="tab:red",
+            edgecolor="black", linewidth=0.6)
+    ax2.axhline(0.001, color="green", linewidth=1.5, linestyle="--",
+                label="target  ε = 0.001")
+    ax2.set_xlabel("itermax")
+    ax2.set_ylabel("Avg SOR residual (lower = more accurate)")
+    ax2.set_title("Residual vs. itermax\n(accuracy)")
+    ax2.legend()
+
+    fig.suptitle("Task 5b — Effect of itermax  (ω=1.7, 50×50, Re=100)", fontsize=12)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task5b_itermax.png")
     plt.close(fig)
