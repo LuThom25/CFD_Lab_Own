@@ -617,25 +617,22 @@ def task6():
     visc_vals= [float(r[3]) for r in rows]
     bar_colors = ["tab:green" if s == "OK" else "tab:red" for s in statuses]
 
-    # ── Figure 6a: stability outcome ───────────────────────────────────────────
-    fig1, ax1 = plt.subplots(figsize=(7, 4))
+    # ── Combined figure: outcome (left) + stability fractions (right) ───────────
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
     green_p = mpatches.Patch(color="tab:green", label="OK (stable)")
     red_p   = mpatches.Patch(color="tab:red",   label="DIVERGED")
+
+    # Left: stability outcome
     ax1.bar([str(d) for d in dt_vals], [1]*len(dt_vals),
             color=bar_colors, edgecolor="black", linewidth=0.6)
     ax1.set_xlabel("Fixed dt")
     ax1.set_ylabel("Stable / Diverged")
     ax1.set_yticks([])
-    ax1.set_title("Task 6 — Simulation Outcome per dt  (50×50, nu=0.01)")
+    ax1.set_title("Simulation Outcome per dt")
     ax1.tick_params(axis="x", rotation=45)
     ax1.legend(handles=[green_p, red_p])
-    fig1.tight_layout()
-    fig1.savefig(PLOTS_DIR / "task6_dt_stability.png")
-    plt.close(fig1)
-    print(f"  → Plot saved: study_plots/task6_dt_stability.png")
 
-    # ── Figure 6b: CFL and viscous stability fractions (standalone) ────────────
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    # Right: CFL and viscous stability fractions
     x = range(len(dt_vals))
     w = 0.38
     b_cfl  = ax2.bar([i - w/2 for i in x], cfl_vals,  width=w, label="CFL = dt/dx",  color="tab:blue",   edgecolor="black", linewidth=0.5)
@@ -648,7 +645,7 @@ def task6():
     def _label_y(h):
         """Place label above bar, but never inside the red limit-line band."""
         y = h + offset
-        if h > 0.5 and y < 1.0 + clearance:   # bar is near the limit line
+        if h > 0.5 and y < 1.0 + clearance:
             y = 1.0 + clearance
         return y
     for bar in b_cfl:
@@ -661,12 +658,14 @@ def task6():
     ax2.set_xticklabels([str(d) for d in dt_vals], rotation=45)
     ax2.set_xlabel("Fixed dt")
     ax2.set_ylabel("Fraction of stability limit")
-    ax2.set_title("Task 6 — CFL and Viscous Stability Fractions  (50×50, nu=0.01)")
+    ax2.set_title("CFL and Viscous Stability Fractions")
     ax2.legend(fontsize=9)
-    fig2.tight_layout()
-    fig2.savefig(PLOTS_DIR / "task6_dt_fractions.png")
-    plt.close(fig2)
-    print(f"  → Plot saved: study_plots/task6_dt_fractions.png")
+
+    fig.suptitle("Task 6 — Fixed Time Step Stability  (50×50, nu=0.01)", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "task6_dt_stability.png")
+    plt.close(fig)
+    print(f"  → Plot saved: study_plots/task6_dt_stability.png")
 
 # ── Task 7: Grid refinement study ─────────────────────────────────────────────
 def task7():
