@@ -495,7 +495,7 @@ def task5():
 
     # ── 5b: vary itermax ───────────────────────────────────────────────────
     print("\n── 5b: Effect of itermax (omega=1.7) ──\n")
-    itermaxs = [5, 10, 20, 50, 100, 200]
+    itermaxs = [5, 10, 20, 50, 100, 200, 500]
     rows2    = []
     for im in itermaxs:
         cfg = {**BASE_CFG, "omg": 1.7, "itermax": im}
@@ -633,9 +633,16 @@ def task6():
     # Right: CFL and visc fractions
     x = range(len(dt_vals))
     w = 0.38
-    ax2.bar([i - w/2 for i in x], cfl_vals,  width=w, label="CFL = dt/dx",       color="tab:blue",   edgecolor="black", linewidth=0.5)
-    ax2.bar([i + w/2 for i in x], visc_vals, width=w, label="dt/dt_visc",         color="tab:orange", edgecolor="black", linewidth=0.5)
+    b_cfl  = ax2.bar([i - w/2 for i in x], cfl_vals,  width=w, label="CFL = dt/dx",  color="tab:blue",   edgecolor="black", linewidth=0.5)
+    b_visc = ax2.bar([i + w/2 for i in x], visc_vals, width=w, label="dt/dt_visc",   color="tab:orange", edgecolor="black", linewidth=0.5)
     ax2.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="limit = 1")
+    # Value labels above each bar
+    for bar in b_cfl:
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.04,
+                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=7, color="tab:blue")
+    for bar in b_visc:
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.04,
+                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=7, color="tab:orange")
     ax2.set_xticks(list(x))
     ax2.set_xticklabels([str(d) for d in dt_vals], rotation=45)
     ax2.set_xlabel("Fixed dt")
@@ -754,8 +761,11 @@ def task7():
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
 
-    ax1.bar(grid_labels, cfl_vals7, color=bar_colors7, edgecolor="black", linewidth=0.6)
+    bars7_1 = ax1.bar(grid_labels, cfl_vals7, color=bar_colors7, edgecolor="black", linewidth=0.6)
     ax1.axhline(1.0, color="red", linewidth=1.4, linestyle="--", label="CFL limit = 1")
+    for bar in bars7_1:
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.04,
+                 f"{bar.get_height():.2f}", ha="center", va="bottom", fontsize=8)
     ax1.set_xlabel("Grid resolution")
     ax1.set_ylabel("CFL ≈ dt / dx")
     ax1.set_title("CFL Number per Grid  (fixed dt=0.05)")
@@ -766,7 +776,11 @@ def task7():
                mpatches.Patch(color="none", label="— CFL limit")])
 
     sor_vals7 = [float(r[5]) if r[5] != "-" else 0 for r in rows]
-    ax2.bar(grid_labels, sor_vals7, color=bar_colors7, edgecolor="black", linewidth=0.6)
+    bars7_2 = ax2.bar(grid_labels, sor_vals7, color=bar_colors7, edgecolor="black", linewidth=0.6)
+    for bar in bars7_2:
+        if bar.get_height() > 0:
+            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                     f"{bar.get_height():.1f}", ha="center", va="bottom", fontsize=8)
     ax2.set_xlabel("Grid resolution")
     ax2.set_ylabel("Avg SOR iterations")
     ax2.set_title("Avg SOR Iterations per Grid")
