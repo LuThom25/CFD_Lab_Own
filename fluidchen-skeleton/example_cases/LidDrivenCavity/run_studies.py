@@ -441,17 +441,20 @@ def task5():
         rows,
     )
 
-    # With SOR fix: most omegas reach eps → rank by avg iter (speed).
-    # Prefer omegas that do NOT hit itermax; fall back to all if none qualify.
-    converged = [(r[0], float(r[1])) for r in rows if r[1] != "-" and r[2] == "no"]
-    if converged:
-        best = min(converged, key=lambda x: x[1])
-        print(f"\n  → Best omega ≈ {best[0]}  (fastest: {best[1]:.0f} avg iter, converges without hitting itermax)")
+    # ── Determine best omega (used for 5a plot AND passed to 5b) ──────────────
+    # Criterion: fewest avg iterations among those that never hit itermax.
+    # Tie-break: lowest avg residual.  Fallback: lowest residual across all.
+    converged_rows5a = [r for r in rows if r[2] == "no" and r[1] != "-"]
+    if converged_rows5a:
+        best_row5a = min(converged_rows5a,
+                         key=lambda r: (float(r[1]), float(r[3]) if r[3] != "-" else 999))
+        best_omg = float(best_row5a[0])
+        print(f"\n  → Best omega ≈ {best_omg}  "
+              f"(fastest: {float(best_row5a[1]):.0f} avg iter, converges without hitting itermax)")
     else:
         valid = [(r[0], float(r[3])) for r in rows if r[3] != "-"]
-        if valid:
-            best = min(valid, key=lambda x: x[1])
-            print(f"\n  → Best omega ≈ {best[0]}  (lowest avg residual = {best[1]:.3f})")
+        best_omg = float(min(valid, key=lambda x: x[1])[0])
+        print(f"\n  → Best omega ≈ {best_omg}  (lowest avg residual, fallback criterion)")
     print()
     print("  Key insight: The pure Neumann pressure system has two convergence blockers:")
     print("  (1) Fredholm incompatibility: sum(RS) ≠ 0 → no solution exists until RS is")
@@ -468,14 +471,6 @@ def task5():
     # ── Plot 5a ────────────────────────────────────────────────────────────────
     omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
     res_vals = [float(r[3]) for r in rows if r[3] != "-"]
-    # "Best" = fewest avg iterations among those that don't hit itermax
-    # (same criterion as the terminal printout → consistent)
-    converged_rows = [r for r in rows if r[2] == "no" and r[1] != "-"]
-    if converged_rows:
-        best_row = min(converged_rows, key=lambda r: float(r[1]))
-        best_omg = float(best_row[0])
-    else:
-        best_omg = omg_vals[res_vals.index(min(res_vals))]
     colors   = ["tab:green" if o == best_omg else "tab:blue" for o in omg_vals]
     fig, ax  = plt.subplots(figsize=(7, 4.5))
     bars = ax.bar([str(o) for o in omg_vals], res_vals,
@@ -501,11 +496,11 @@ def task5():
     print(f"\n  → Plot saved: study_plots/task5a_omega_residual.png")
 
     # ── 5b: vary itermax ───────────────────────────────────────────────────
-    print("\n── 5b: Effect of itermax (omega=1.9 — optimal from 5a) ──\n")
+    print(f"\n── 5b: Effect of itermax (omega={best_omg} — optimal from 5a) ──\n")
     itermaxs = [5, 10, 20, 50, 100, 200, 500]
     rows2    = []
     for im in itermaxs:
-        cfg = {**BASE_CFG, "omg": 1.9, "itermax": im, "t_end": 50.0}
+        cfg = {**BASE_CFG, "omg": best_omg, "itermax": im, "t_end": 50.0}
         r   = run_case(cfg, f"itermax_{im}", timeout=300)
         rows2.append([
             im,
@@ -572,7 +567,7 @@ def task5():
     ax2.set_title("Residual vs. itermax\n(accuracy — log scale)")
     ax2.legend()
 
-    fig.suptitle("Task 5b — Effect of itermax  (ω=1.9, 50×50, Re=100)", fontsize=12)
+    fig.suptitle(f"Task 5b — Effect of itermax  (ω={best_omg}, 50×50, Re=100)", fontsize=12)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task5b_itermax.png")
     plt.close(fig)
