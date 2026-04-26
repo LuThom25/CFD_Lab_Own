@@ -412,7 +412,7 @@ def task4():
 # ── Task 5: SOR omega and itermax study ───────────────────────────────────────
 def task5():
     section("Task 5 — SOR Solver Behavior")
-    print("Grid: 50×50  nu=0.01  Re≈100  t_end=5.0  (adaptive dt, tau=0.5)\n")
+    print("Grid: 50×50  nu=0.01  Re≈100  t_end=50.0  (adaptive dt, tau=0.5)\n")
 
     # ── 5a: vary omega ──────────────────────────────────────────────────────
     # Use itermax=500 so SOR can actually converge within the budget
@@ -422,8 +422,8 @@ def task5():
     omegas = [0.5, 1.0, 1.3, 1.5, 1.7, 1.8, 1.9, 1.95, 1.99]
     rows   = []
     for omg in omegas:
-        cfg = {**BASE_CFG, "omg": omg, "itermax": 500}
-        r   = run_case(cfg, f"omega_{omg}")
+        cfg = {**BASE_CFG, "omg": omg, "itermax": 500, "t_end": 50.0}
+        r   = run_case(cfg, f"omega_{omg}", timeout=300)
         hits = "YES" if r.get("max_sor", 0) >= 500 else "no"
         rows.append([
             omg,
@@ -505,8 +505,8 @@ def task5():
     itermaxs = [5, 10, 20, 50, 100, 200, 500]
     rows2    = []
     for im in itermaxs:
-        cfg = {**BASE_CFG, "omg": 1.7, "itermax": im}
-        r   = run_case(cfg, f"itermax_{im}")
+        cfg = {**BASE_CFG, "omg": 1.7, "itermax": im, "t_end": 50.0}
+        r   = run_case(cfg, f"itermax_{im}", timeout=300)
         rows2.append([
             im,
             f"{r.get('avg_sor', '-'):.1f}" if "avg_sor" in r else "-",
@@ -813,15 +813,15 @@ def task7():
 
 # ── Task 8: Viscosity / Reynolds number study ─────────────────────────────────
 def task8():
-    section("Task 8 — Kinematic Viscosity Study (adaptive dt, t_end=10.0)")
-    print("Grid: 50×50  adaptive dt (tau=0.5)  t_end=10.0\n")
+    section("Task 8 — Kinematic Viscosity Study (adaptive dt, t_end=50.0)")
+    print("Grid: 50×50  adaptive dt (tau=0.5)  t_end=50.0\n")
 
     nus  = [0.01, 0.002, 0.0005, 0.0001]
     rows = []
     for nu in nus:
         Re  = 1.0 / nu   # U=L=1
-        cfg = {**BASE_CFG, "nu": nu, "tau": 0.5, "t_end": 10.0}
-        r   = run_case(cfg, f"nu_{nu}", timeout=300)
+        cfg = {**BASE_CFG, "nu": nu, "tau": 0.5, "t_end": 50.0}
+        r   = run_case(cfg, f"nu_{nu}", timeout=600)
         avg_dt_str = f"{r['avg_dt']:.2e}" if "avg_dt" in r else "-"
         rows.append([
             nu,
@@ -867,7 +867,7 @@ def task8():
         case_dir = VIS_DIR / label
         case_dir.mkdir(exist_ok=True)
 
-        cfg_vis = {**BASE_CFG, "nu": nu, "tau": 0.5, "t_end": 10.0, "dt_value": 0.5}
+        cfg_vis = {**BASE_CFG, "nu": nu, "tau": 0.5, "t_end": 50.0, "dt_value": 0.5}
         print(f"  Running Re={Re:>5} (nu={nu}) for VTK output ...", flush=True)
         r = run_case_vtk(cfg_vis, label, case_dir, timeout=300)
         print(f"    solver: {r['status']}", flush=True)
@@ -944,7 +944,7 @@ def task8():
     ax2.set_title("SOR Iterations vs. Re")
     ax2.legend()
 
-    fig.suptitle("Task 8 — Viscosity / Reynolds Number Study  (50×50, adaptive dt, t_end=10)", fontsize=11)
+    fig.suptitle("Task 8 — Viscosity / Reynolds Number Study  (50×50, adaptive dt, t_end=50)", fontsize=11)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task8_viscosity_study.png")
     plt.close(fig)
