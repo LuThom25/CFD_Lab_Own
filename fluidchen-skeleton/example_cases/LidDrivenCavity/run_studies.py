@@ -501,11 +501,11 @@ def task5():
     print(f"\n  → Plot saved: study_plots/task5a_omega_residual.png")
 
     # ── 5b: vary itermax ───────────────────────────────────────────────────
-    print("\n── 5b: Effect of itermax (omega=1.7) ──\n")
+    print("\n── 5b: Effect of itermax (omega=1.9 — optimal from 5a) ──\n")
     itermaxs = [5, 10, 20, 50, 100, 200, 500]
     rows2    = []
     for im in itermaxs:
-        cfg = {**BASE_CFG, "omg": 1.7, "itermax": im, "t_end": 50.0}
+        cfg = {**BASE_CFG, "omg": 1.9, "itermax": im, "t_end": 50.0}
         r   = run_case(cfg, f"itermax_{im}", timeout=300)
         rows2.append([
             im,
@@ -522,8 +522,8 @@ def task5():
         rows2,
     )
     print("\n  Note (with SOR fix applied):")
-    print("  Transient phase (t≈0–10 s): SOR needs 10–70 iterations as the velocity")
-    print("  field changes rapidly → itermax=5 hits cap, ~20–30 are sufficient here.")
+    print("  Transient phase (t≈0–10 s): SOR needs 10–50 iterations as the velocity")
+    print("  field changes rapidly → itermax=5 hits cap, ~20 are sufficient here.")
     print("  Quasi-steady phase (t>>10 s): only 2–5 iterations per step needed.")
     print("  The Task-4 avg of ~5 is dominated by the long quasi-steady tail (t=10–50 s).")
     print("  Low itermax → SOR aborts early → avg residual stays above eps=0.001 →")
@@ -572,7 +572,7 @@ def task5():
     ax2.set_title("Residual vs. itermax\n(accuracy — log scale)")
     ax2.legend()
 
-    fig.suptitle("Task 5b — Effect of itermax  (ω=1.7, 50×50, Re=100)", fontsize=12)
+    fig.suptitle("Task 5b — Effect of itermax  (ω=1.9, 50×50, Re=100)", fontsize=12)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task5b_itermax.png")
     plt.close(fig)
