@@ -214,13 +214,15 @@ const double p_mean = p_sum / static_cast<double>(N);
 for (auto cell : cells) field.p(cell->i(), cell->j()) -= p_mean;
 ```
 
-**Result** (50×50, Re=100, $\omega=1.7$, itermax=100, $\varepsilon=10^{-3}$):
+**Result** (50×50, Re=100, $\omega=1.7$, itermax=100, $\varepsilon=10^{-3}$, $t_\text{end}=50$ s):
 
 | Metric | Before fix | After fix |
 |--------|-----------|-----------|
-| avg SOR iterations | 100 (always) | **4.8** |
+| avg SOR iterations | 100 (always hits cap) | **4.8** |
 | avg residual | 1.230 | **3.4×10⁻³** |
-| Converges to $\varepsilon$? | Never | ✅ (steps 2 onward) |
+| Converges to $\varepsilon$? | Never | ✅ (quasi-steady phase) |
+
+**Optimal relaxation factor:** Task 5a study (itermax=500, $t_\text{end}=50$ s) shows $\omega=1.9$ as best — it is the fastest value that **never** hits itermax (8 avg iterations). $\omega=1.7$ achieves 5 avg iterations but occasionally exhausts the itermax budget during the transient phase.
 
 The fix is physically harmless: velocity fields depend only on pressure *gradients*, not absolute levels. The zero-mean normalization only removes the undetermined constant.
 
@@ -317,4 +319,6 @@ All matrices use column-major storage: `_container[num_cols * j + i]`.
 | **Viscous stability dominates** | At Re=100, $\delta t_\text{visc}=0.010 < \delta t_\text{CFL}=0.020$. Adaptive stepping automatically selects a safe margin of $\tau \cdot \delta t_\text{visc}=0.005$. |
 | **Ghost cells before F/G** | `applyVelocity()` must be called *before* `calculate_fluxes()` so that boundary-adjacent stencils access correct ghost values. |
 | **Fixed dt + fine grid = divergence** | For $\delta t=0.05$ and $\delta x < 0.05$, the upper-bound CFL>1. Instability grows exponentially; rate scales with CFL. The 32×32 case (CFL≈1.6) appears stable for $t_\text{end}=5$ s because interior velocities start at zero and the true local CFL stays below 1 for most of the run — it is *marginal*, not truly stable. At CFL≈3.2 (64×64) the instability is strong enough to blow up immediately. Use adaptive dt for all fine-grid runs. |
-| **High Re → more SOR iterations** | The pressure equation becomes more ill-conditioned as Re increases. At Re≥1000, itermax=100 is insufficient for full convergence. |
+| **High Re → more SOR iterations** | Finer grids and higher Re make the Poisson system larger and stiffer. At Re≥1000 with 50×50, itermax=100 is reached during the transient phase. For high-Re transient accuracy increase itermax to ≥200. |
+| **itermax=5 diverges at t_end=50** | With ω=1.9 and t_end=50, itermax=5 causes divergence. The transient phase (t≈0–15 s) demands ~20 SOR iterations per step; 5 are insufficient → pressure error accumulates → velocity blowup. The SOR budget must cover the worst-case transient demand, not just the quasi-steady average. |
+| **avg\_sor denominator bug (fixed)** | The diverging timestep previously didn't increment `timestep` before `break`, making avg\_sor = total\_iter / (N−1) and allowing values >itermax (e.g. 133.3 with itermax=100). Fixed by incrementing `timestep` before the divergence break. |

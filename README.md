@@ -64,9 +64,11 @@ Runtime: ~2 min for t_end=50 at 50×50, Re=100.
 
 ### 3. Visualize results (requires ParaView)
 ```bash
-/Applications/ParaView-6.1.0.app/Contents/bin/pvpython visualize.py
+/Applications/ParaView-6.0.1.app/Contents/bin/pvpython visualize.py
 ```
 Generates static images (u, v, pressure, velocity magnitude, glyphs, streamlines, Jet-coloured vectors, direction-only white arrows) and animation frames for all quantities. All output goes to `task4/`.
+
+> **Note:** `run_studies.py` uses temporary directories and cleans up all VTK output after each run. Always run `fluidchen LidDrivenCavity.dat` directly before calling `visualize.py`.
 
 ### 4. Create videos
 ```bash
@@ -84,12 +86,11 @@ Outputs ASCII tables + matplotlib plots saved to `study_plots/`.
 
 ### 6. Run everything at once
 ```bash
-cd fluidchen-skeleton/build && make -j4 && \
-cd ../example_cases/LidDrivenCavity && \
+cd fluidchen-skeleton/example_cases/LidDrivenCavity && \
 ../../build/fluidchen LidDrivenCavity.dat && \
-/Applications/ParaView-6.1.0.app/Contents/bin/pvpython visualize.py && \
+/Applications/ParaView-6.0.1.app/Contents/bin/pvpython visualize.py && \
 bash make_videos.sh && \
-python3 run_studies.py
+python3 run_studies.py 5 6 7 8
 ```
 
 ## Branches
@@ -100,17 +101,18 @@ python3 run_studies.py
 | `ws1_extensions` | Parameter studies, run_studies.py (Tasks 5–8) |
 | `ws1_further_extensions` | Vector visualizations, README, Summary, Report |
 | `ws1_further_extensions_improved_SOR` | SOR convergence fix (Fredholm + zero-mean pressure) |
+| `ws1_further_extensions_improved_SOR_small_improvements` | **Current**: code quality, plot improvements, bug fixes |
 
 ## Key Results Summary
 
 | Task | Study | Key Finding |
 |------|-------|------------|
-| 4 | Base LDC, Re=100 | Stable vortex at t≈5 s; avg_dt=5×10⁻³ s; **avg SOR=4.8 iter** (Fredholm fix) |
-| 5a | SOR omega ∈ [0.5, 1.99] | Pre-fix: best omega≈1.5 (lowest residual). Post-fix: omega≈1.7–1.9 fastest (~5 iter) |
-| 5b | itermax ∈ [5, 200] | Pre-fix: always hits cap. Post-fix: converges within budget; low itermax degrades accuracy |
-| 6 | Fixed dt stability | dt_visc=0.010 is binding; stable for dt < 0.010 |
-| 7 | Grid 16–256, fixed dt=0.05 | 16×16 OK; **32×32 marginal** (CFL=1.6, survives t_end=5 s); 64×64+ diverges |
-| 8 | nu=0.01→0.0001 (Re=100→10000) | avg_dt increases with Re (viscous limit relaxes) |
+| 4 | Base LDC, Re=100, t_end=50 | Quasi-steady vortex; avg_dt=5×10⁻³ s; avg SOR=4.8 iter (Fredholm fix) |
+| 5a | SOR ω ∈ [0.5, 1.99], itermax=500, t_end=50 | **Best ω=1.9** (8 avg iter, never hits itermax); ω=1.7 faster on avg (5 iter) but occasionally hits cap |
+| 5b | itermax ∈ [5, 500], ω=1.9, t_end=50 | itermax=5 **DIVERGES**; itermax≥10 stable; itermax≥200 reaches ε=0.001 |
+| 6 | Fixed dt stability, t_end=5 | dt_visc=0.010 s is binding; stable only for dt < 0.010 s |
+| 7 | Grid 16–256, fixed dt=0.05, nu=0.001, t_end=5 | Only 16×16 truly stable (CFL=0.80); 32×32 marginal; 64×64+ diverges. SOR iter: 15.7→35.7→100 |
+| 8 | nu=0.01→0.0001 (Re=100→10000), t_end=50 | avg_dt increases with Re (viscous limit relaxes); complex vortex structures at high Re |
 
 ## Output Files Overview
 
@@ -136,6 +138,6 @@ All static images and videos are in `LidDrivenCavity_Output/task4/`.
 - C++17 compiler (clang/gcc)
 - CMake ≥ 3.14
 - VTK (bundled via CMake)
-- ParaView ≥ 5.x (for `pvpython visualize.py`)
+- ParaView ≥ 5.x with pvpython (tested: 6.0.1, 6.1.0)
 - Python 3 with: `matplotlib`, `Pillow`
 - ffmpeg (for video assembly)

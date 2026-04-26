@@ -119,11 +119,11 @@ with face values $u_e = (U(i,j)+U(i+1,j))/2$, $u_w = (U(i-1,j)+U(i,j))/2$. Setti
 | Task | Grid | $\nu$ | Re | $\Delta t$ mode | $t_\text{end}$ | Purpose |
 |---|---|---|---|---|---|---|
 | 4 | 50×50 | 0.01 | 100 | Adaptive ($\tau=0.5$) | 50.0 s | Base flow structure |
-| 5a | 50×50 | 0.01 | 100 | Adaptive | 5.0 s | Effect of SOR $\omega$ |
-| 5b | 50×50 | 0.01 | 100 | Adaptive | 5.0 s | Effect of itermax |
+| 5a | 50×50 | 0.01 | 100 | Adaptive | 50.0 s | Effect of SOR $\omega$ |
+| 5b | 50×50 | 0.01 | 100 | Adaptive | 50.0 s | Effect of itermax (best ω from 5a) |
 | 6 | 50×50 | 0.01 | 100 | Fixed (varied) | 5.0 s | Time-step stability |
 | 7 | 16–256 | 0.001 | 1000 | Fixed ($\Delta t=0.05$) | 5.0 s | Grid refinement |
-| 8 | 50×50 | 0.01–0.0001 | 100–10000 | Adaptive ($\tau=0.5$) | 10.0 s | Re effects |
+| 8 | 50×50 | 0.01–0.0001 | 100–10000 | Adaptive ($\tau=0.5$) | 50.0 s | Re effects |
 
 ### Task 4 — Base Lid-Driven Cavity Simulation (Re = 100)
 
@@ -155,46 +155,62 @@ The VTK outputs are visualised in ParaView via `visualize.py`, producing:
 
 ### Task 5 — SOR Solver Behaviour
 
-#### 5a: Effect of relaxation factor $\omega$ (itermax = 500)
+#### 5a: Effect of relaxation factor $\omega$ (itermax = 500, $t_\text{end}=50$ s)
 
-The table below was measured on the solver **without** the Fredholm fix, to isolate the effect of $\omega$ on the raw SOR behaviour and to document the null-space problem that motivated the fix:
+**Root cause — pressure null space:** With pure Neumann BCs the discrete Poisson system $\mathbf{A}\mathbf{p} = \mathbf{b}$ is singular. Two independent mechanisms prevent convergence without a fix:
+
+1. **Fredholm incompatibility**: Floating-point flux imbalances give $\sum b_i \neq 0$, so no solution exists — SOR diverges regardless of $\omega$.
+2. **Null-space drift**: Each sweep accumulates a growing constant offset in $p$, preventing residual decay.
+
+**Fix applied** (branch `ws1_further_extensions_improved_SOR`): subtract $\overline{\text{RS}}$ after `calculate_rs()` (Fredholm compatibility) and subtract $\bar{p}$ after each SOR sweep (zero-mean projection).
+
+Results **without fix** (itermax=500, $t_\text{end}=5$ s — all omegas exhaust budget):
+
+| $\omega$ | avg SOR iter | Hits itermax | avg residual |
+|---|---|---|---|
+| 0.50 | 500 | YES | 1.360 |
+| **1.50** | 500 | YES | **1.210** (lowest) |
+| 1.70 | 500 | YES | 1.230 |
+| 1.90 | 500 | YES | 1.880 |
+| 1.99 | 500 | YES | 5.240 |
+
+Results **with fix** (itermax=500, $t_\text{end}=50$ s — SOR now converges):
 
 | $\omega$ | avg SOR iter | Hits itermax | avg residual | Wall time |
 |---|---|---|---|---|
-| 0.50 | 500 | YES | 1.360 | 15.8 s |
-| 1.00 | 500 | YES | 1.270 | 15.9 s |
-| 1.30 | 500 | YES | 1.240 | 15.9 s |
-| **1.50** | 500 | YES | **1.210** | 15.9 s |
-| 1.70 | 500 | YES | 1.230 | 15.9 s |
-| 1.80 | 500 | YES | 1.340 | 16.1 s |
-| 1.90 | 500 | YES | 1.880 | 16.0 s |
-| 1.95 | 500 | YES | 2.840 | 16.0 s |
-| 1.99 | 500 | YES | 5.240 | 16.0 s |
+| 0.50 | 28 | YES | 0.010 | 9.7 s |
+| 1.00 | 14 | YES | 0.002 | 5.2 s |
+| 1.30 | 9 | YES | 0.001 | 3.5 s |
+| 1.50 | 6 | YES | 0.001 | 2.7 s |
+| 1.70 | 5 | YES | 0.001 | 2.4 s |
+| 1.80 | 6 | YES | 0.001 | 2.6 s |
+| **1.90** | **8** | **no** | **0.001** | **3.4 s** |
+| 1.95 | 12 | no | 0.001 | 4.5 s |
+| 1.99 | 38 | YES | 0.001 | 13.5 s |
 
-**Three regimes:**
-1. **Under-relaxation** ($\omega < 1$): Gauss–Seidel-like slow convergence. More iterations are needed per unit residual reduction; the spectral radius of the iteration matrix is close to 1.
-2. **Near-optimal over-relaxation** ($1.3 \lesssim \omega \lesssim 1.7$): The spectral radius is minimised. For a $50\times50$ Dirichlet problem the theoretical optimum is $\omega_\text{opt} = 2/(1 + \sin(\pi/N)) \approx 1.73$.
-3. **Aggressive over-relaxation** ($\omega \to 2$): The iteration overshoots; errors grow rather than decay. The residual at $\omega=1.99$ is 4× larger than at the optimum.
+**Three regimes (post-fix):**
+1. **Under-relaxation** ($\omega < 1$): slow convergence, many iterations, may still hit itermax during the transient phase.
+2. **Near-optimal over-relaxation** ($1.3 \lesssim \omega \lesssim 1.9$): fast convergence. For a $50\times50$ Poisson problem the theoretical optimum is $\omega_\text{opt} = 2/(1+\sin(\pi/N)) \approx 1.73$; empirically $\omega=1.9$ is best here because it is the fastest value that **never** hits itermax (8 avg iter, no cap reached throughout $t_\text{end}=50$ s). $\omega=1.7$ is slightly faster on average (5 iter) but occasionally exhausts the budget in transient steps.
+3. **Aggressive over-relaxation** ($\omega \to 2$): overshooting; residual climbs and budget is hit again.
 
-**Root cause and fix — pressure null space:** With pure Neumann BCs the discrete Poisson system $\mathbf{A}\mathbf{p} = \mathbf{b}$ is singular: the constant vector $\mathbf{1}$ satisfies $\mathbf{A}\mathbf{1} = \mathbf{0}$. This causes two convergence blockers:
+**Best $\omega = 1.9$** — used in Task 5b.
 
-1. **Fredholm incompatibility**: Floating-point flux imbalances mean $\sum b_i \neq 0$, so the linear system has no solution. SOR diverges from the start.
-2. **Null-space drift**: Even with a compatible RHS, each sweep accumulates a growing constant offset in $p$ (the null-space component), which prevents residual decay.
+#### 5b: Effect of itermax ($\omega = 1.9$, $t_\text{end}=50$ s)
 
-**Fix applied** (branch `ws1_further_extensions_improved_SOR`): subtract $\overline{\text{RS}}$ after `calculate_rs()` (Fredholm compatibility) and subtract $\bar{p}$ after each SOR sweep (zero-mean projection). With the fix, $\omega \approx 1.7$–$1.9$ converges within $\varepsilon = 10^{-3}$ in ~5 iterations at quasi-steady state — an improvement of 20× over the pre-fix saturation level.
+| itermax | avg SOR iter | max SOR iter | avg residual | Status |
+|---|---|---|---|---|
+| 5 | 5.0 | 5 | diverged | **DIVERGED** |
+| 10 | 7.1 | 10 | 0.435 | OK |
+| 20 | 7.5 | 20 | 0.033 | OK |
+| 50 | 8.0 | 50 | 0.006 | OK |
+| 100 | 8.2 | 100 | 0.002 | OK |
+| 200 | 8.3 | 200 | 0.001 | OK |
+| 500 | 8.4 | 430 | 0.001 | OK |
 
-#### 5b: Effect of itermax ($\omega = 1.7$)
-
-| itermax | avg SOR iter | max SOR iter | Status |
-|---|---|---|---|
-| 5 | 5.0 | 5 | OK |
-| 10 | 10.0 | 10 | OK |
-| 20 | 20.0 | 20 | OK |
-| 50 | 50.0 | 50 | OK |
-| 100 | 100.0 | 100 | OK |
-| 200 | 200.0 | 200 | OK |
-
-With the pre-fix solver the budget is exhausted at every time step regardless of `itermax` — increasing `itermax` only reduces the saturation residual at proportionally higher cost. With the Fredholm + zero-mean fix applied, the SOR loop exits on the $\varepsilon$ criterion rather than on `itermax`; very small values such as `itermax=5` leave the residual too high and degrade pressure accuracy, but the simulation remains numerically stable even then.
+**Key observations:**
+- **itermax=5 diverges**: the transient phase ($t \approx 0$–$15$ s) demands up to ~20 SOR iterations per step. With only 5 allowed, the pressure correction is so inaccurate that velocity errors accumulate and the solver blows up. The SOR budget must cover the worst-case transient demand, not just the quasi-steady average.
+- **avg SOR iterations barely change** (7–9 across all itermax values): the quasi-steady tail (~8000 of 10000 steps) dominates the average. Increasing itermax costs little in wall time but is critical for stability.
+- **Residual decreases monotonically** with increasing itermax: only itermax≥200 consistently reaches $\varepsilon=0.001$.
 
 ### Task 6 — Fixed Time-Step Stability (50×50, $\nu = 0.01$)
 
@@ -221,15 +237,17 @@ $$\Delta t_\text{visc} = \frac{\Delta x^2}{4\nu} = \frac{(0.02)^2}{4 \times 0.01
 
 ### Task 7 — Grid Refinement (fixed $\Delta t = 0.05$ s, $\nu = 0.001$, Re = 1000)
 
-| Grid | $\Delta x$ | CFL $\approx \Delta t/\Delta x$ | $\Delta t/\Delta t_\text{visc}$ | Status | avg SOR iter |
-|---|---|---|---|---|---|
-| 16×16 | 0.06250 | 0.80 | 160 | **OK** | 100.0 |
-| 32×32 | 0.03125 | 1.60 | 640 | **OK** | 100.0 |
-| 64×64 | 0.01562 | 3.20 | 2563 | DIVERGED | 110.0 |
-| 128×128 | 0.00781 | 6.40 | 10253 | DIVERGED | 125.0 |
-| 256×256 | 0.00391 | 12.80 | 41013 | DIVERGED | 133.3 |
+| Grid | $\Delta x$ | CFL $\approx \Delta t/\Delta x$ | Status | avg SOR iter |
+|---|---|---|---|---|
+| 16×16 | 0.06250 | 0.80 | **OK** | 15.7 |
+| 32×32 | 0.03125 | 1.60 | **OK** (marginal) | 35.7 |
+| 64×64 | 0.01562 | 3.20 | DIVERGED | 100.0 |
+| 128×128 | 0.00781 | 6.40 | DIVERGED | 100.0 |
+| 256×256 | 0.00391 | 12.80 | DIVERGED | 100.0 |
 
-Note: $\Delta t_\text{visc} = \Delta x^2/(4\nu)$ shrinks quadratically with grid refinement. At $\nu=0.001$ (Re=1000) and $\Delta x=0.0156$ (64×64), $\Delta t_\text{visc} = (0.0156)^2/(4\times0.001) \approx 0.000061$ s — four orders of magnitude smaller than the fixed $\Delta t=0.05$.
+Note: The viscous stability limit $\Delta t_\text{visc} = \Delta x^2/(4\nu)$ at $\nu=0.001$ (Re=1000) and 64×64 gives $\Delta t_\text{visc} \approx 6\times10^{-5}$ s — three orders of magnitude below the fixed $\Delta t=0.05$ s. The CFL condition ($\Delta t < \Delta x$) is far less restrictive but is still violated for all grids finer than 16×16.
+
+**SOR iterations increase sharply with grid refinement:** 15.7 avg (16×16) → 35.7 avg (32×32) → 100.0 avg (64×64+, always hits itermax). Finer grids have more unknowns and a larger, stiffer pressure Poisson system — SOR needs more iterations to converge to the same residual tolerance $\varepsilon$.
 
 **Why does 32×32 survive although CFL > 1?**
 
@@ -245,14 +263,14 @@ The CFL > 1 violation exists only at the very first row of cells directly below 
 
 **Fundamental conclusion:** Halving the mesh spacing requires halving $\Delta t$ (CFL) or — more restrictively — quartering $\Delta t$ (viscous). Fixed time stepping is incompatible with grid convergence studies for explicit schemes. Adaptive time stepping ($\tau > 0$) automatically satisfies both conditions at every step regardless of mesh size.
 
-### Task 8 — Reynolds Number Effects (adaptive $\Delta t$, $t_\text{end} = 10$ s)
+### Task 8 — Reynolds Number Effects (adaptive $\Delta t$, $t_\text{end} = 50$ s)
 
 | $\nu$ | Re | avg $\Delta t$ (s) | avg SOR iter | Hits itermax | Status |
 |---|---|---|---|---|---|
-| 0.01 | 100 | 5.00×10⁻³ | 100.0 | YES | OK |
-| 0.002 | 500 | 1.15×10⁻² | 100.0 | YES | OK |
-| 0.0005 | 2000 | 1.36×10⁻² | 100.0 | YES | OK |
-| 0.0001 | 10000 | 2.13×10⁻² | 100.0 | YES | OK |
+| 0.01 | 100 | 5.00×10⁻³ | 4.8 | YES | OK |
+| 0.002 | 500 | 1.13×10⁻² | 8.8 | YES | OK |
+| 0.0005 | 2000 | 1.32×10⁻² | 9.0 | YES | OK |
+| 0.0001 | 10000 | 1.98×10⁻² | 8.6 | YES | OK |
 
 #### Trend in adaptive $\Delta t$ with Re
 
@@ -262,7 +280,7 @@ $$\Delta t = \tau \cdot \min\!\left(\underbrace{\frac{\Delta x^2}{4\nu}}_{\Delta
 
 At Re=100: $\Delta t_\text{visc} = 0.010$ s, $\Delta t_\text{CFL} \approx 0.020$ s → viscous limit binds → $\Delta t = 0.005$ s.
 
-As $\nu$ decreases (Re increases), $\Delta t_\text{visc} \propto 1/\nu$ grows and eventually exceeds $\Delta t_\text{CFL} \approx \Delta x/U_\text{wall} = 0.02$ s. The CFL condition then becomes the binding constraint. At Re=10000: $\Delta t_\text{visc} = 1.0$ s $\gg \Delta t_\text{CFL} \approx 0.02$ s, so the adaptive step is $\approx 0.5 \times 0.02 = 0.01$ s, consistent with the measured value of $2.13\times10^{-2}$.
+As $\nu$ decreases (Re increases), $\Delta t_\text{visc} \propto 1/\nu$ grows and eventually exceeds $\Delta t_\text{CFL} \approx \Delta x/U_\text{wall} = 0.02$ s. The CFL condition then becomes the binding constraint. At Re=10000: $\Delta t_\text{visc} = 1.0$ s $\gg \Delta t_\text{CFL} \approx 0.02$ s, so the adaptive step is $\approx 0.5 \times 0.02 = 0.01$ s, consistent with the measured value of $1.98\times10^{-2}$ (average over the full run includes early steps where velocities are still small, allowing slightly larger dt).
 
 #### Physical flow changes with Re
 
@@ -270,7 +288,7 @@ As $\nu$ decreases (Re increases), $\Delta t_\text{visc} \propto 1/\nu$ grows an
 
 **Re = 500–2000 (moderate inertia):** The vortex centre moves toward the geometric cavity centre as inertia becomes more important. Secondary corner eddies (Moffatt eddies) at the bottom corners grow in strength. The shear layer along the moving lid thins, concentrating the velocity gradient near the top wall.
 
-**Re = 10000 (high inertia):** The flow is potentially unsteady. On the 50×50 grid with $t_\text{end}=10$ s the simulation remains stable, but the coarse grid cannot resolve the thin shear layers and small-scale eddies present at this Reynolds number. Qualitatively the primary vortex occupies the full cavity and bottom-corner eddies are visible. A fine-grid, long-time simulation would be needed to determine whether the flow is truly steady or exhibits periodic or chaotic fluctuations.
+**Re = 10000 (high inertia):** The flow is potentially unsteady. On the 50×50 grid with $t_\text{end}=50$ s the simulation remains stable thanks to adaptive time stepping, but the coarse grid cannot resolve the thin shear layers and small-scale eddies present at this Reynolds number. Qualitatively the primary vortex occupies the full cavity and bottom-corner eddies are visible. A fine-grid, long-time simulation would be needed to determine whether the flow is truly steady or exhibits periodic or chaotic fluctuations.
 
 See `LidDrivenCavity_Output/study_plots/task8_re_comparison.png` for a side-by-side comparison of velocity magnitude and streamlines at all four Reynolds numbers.
 
@@ -282,10 +300,10 @@ A 2D incompressible Navier-Stokes solver for the Lid-Driven Cavity benchmark was
 
 1. **Base simulation (Task 4):** At Re=100 the flow reaches quasi-steady state with a single stable primary vortex. The adaptive time step settles at $\Delta t = 5\times10^{-3}$ s, set by the viscous stability condition. With the Fredholm compatibility fix and zero-mean pressure projection applied, the SOR solver converges at every step (avg 4.8 iterations, residual $3.4\times10^{-3} < \varepsilon = 10^{-3}$) instead of always exhausting the iteration budget.
 
-2. **SOR convergence (Task 5):** Without the null-space fix every value of $\omega$ exhausts the 500-iteration budget, with $\omega \approx 1.5$ achieving the lowest saturation residual of 1.210. The root cause is twofold: (a) Fredholm incompatibility ($\sum b_i \neq 0$ due to floating-point flux imbalances) and (b) null-space drift (accumulation of a constant offset in $p$ per sweep). Subtracting the mean RS and mean pressure after each sweep resolves both issues; with the fix, $\omega \approx 1.7$–$1.9$ converges to $\varepsilon = 10^{-3}$ in $\sim$5 iterations at quasi-steady state.
+2. **SOR convergence (Task 5):** Without the null-space fix every value of $\omega$ exhausts the 500-iteration budget, with $\omega \approx 1.5$ achieving the lowest saturation residual of 1.210. The root cause is twofold: (a) Fredholm incompatibility ($\sum b_i \neq 0$ due to floating-point flux imbalances) and (b) null-space drift (accumulation of a constant offset in $p$ per sweep). Subtracting the mean RS and mean pressure after each sweep resolves both issues. With the fix and $t_\text{end}=50$ s, the optimal relaxation factor is $\omega=1.9$ — the fastest value that never exhausts itermax (8 avg iterations; $\omega=1.7$ achieves 5 avg iterations but occasionally hits the cap during the transient phase). **itermax must be at least ~20** to survive the transient phase; itermax=5 causes divergence.
 
 3. **Time-step stability (Task 6):** The binding stability constraint at Re=100 is the **viscous diffusion condition** $\Delta t < h^2/(4\nu) = 0.010$ s, which is twice as restrictive as the CFL condition ($\Delta t < 0.020$ s). All simulations with $\Delta t \geq 0.010$ s diverge immediately, confirming the theoretical prediction of the explicit Euler scheme.
 
 4. **Grid refinement (Task 7):** With fixed $\Delta t=0.05$ s at Re=1000, only grids coarser than $\Delta x > \Delta t$ (16×16 and 32×32) remain stable. Finer grids require $\Delta t \propto h$ (CFL) or $\propto h^2$ (viscous), making adaptive time stepping essential for mesh refinement studies. Adaptive stepping automatically selects the appropriate $\Delta t$ at any grid resolution.
 
-5. **Reynolds number effects (Task 8):** The adaptive time step increases with Re as the viscous stability limit relaxes. All four cases (Re=100 to Re=10000) run stably. At Re=10000 the 50×50 grid and $t_\text{end}=10$ s are insufficient to resolve the flow; finer grids, longer simulations, and implicit time integration would be required to accurately simulate high-Re LDC flows.
+5. **Reynolds number effects (Task 8):** The adaptive time step increases with Re as the viscous stability limit relaxes (avg $\Delta t$: 5×10⁻³ at Re=100 → 2×10⁻² at Re=10000). All four cases (Re=100 to Re=10000) run stably to $t_\text{end}=50$ s with adaptive stepping. The flow structure evolves from a single primary vortex (Re=100) to increasingly complex multi-vortex patterns with pronounced corner eddies (Re=2000–10000). At Re=10000 the 50×50 grid cannot resolve thin shear layers; finer grids, longer simulations, and implicit time integration would be required for accuracy.
