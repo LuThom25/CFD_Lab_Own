@@ -14,6 +14,7 @@ class Cell {
   public:
     Cell() = default;
     Cell(const Cell &other_cell) = default;
+    Cell &operator=(const Cell &other_cell) = default;
     /**
      * @brief Constructor for Cell object
      *

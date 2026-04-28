@@ -83,6 +83,9 @@ class Fields {
     /// get timestep size
     double dt() const;
 
+    /// get adaptive timestep coefficient (tau <= 0 means fixed dt)
+    double tau() const;
+
     /// pressure matrix access and modify
     Matrix<double> &p_matrix();
 

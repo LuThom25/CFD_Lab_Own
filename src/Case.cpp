@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <vector>
 
@@ -19,7 +21,7 @@ namespace filesystem = std::filesystem;
 #include "Case.hpp"
 #include "Enums.hpp"
 
-Case::Case(std::string file_name, int argn, char **args) {
+Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
@@ -40,12 +42,19 @@ Case::Case(std::string file_name, int argn, char **args) {
     int itermax{};    /* max. number of iterations for pressure per time step */
     double eps{};     /* accuracy bound for pressure*/
 
-    if (file.is_open()) {
+    // R1: fail fast if the input file cannot be opened.
+    if (!file.is_open()) {
+        std::cerr << "Error: could not open input file '" << file_name << "'.\n";
+        std::exit(1);
+    }
 
+    {
         std::string var;
         while (!file.eof() && file.good()) {
             file >> var;
-            if (var[0] == '#') { /* ignore comment line*/
+            // R1: guard against empty token (e.g. trailing whitespace at EOF).
+            if (var.empty()) continue;
+            if (var[0] == '#') { /* ignore comment line */
                 file.ignore(MAX_LINE_LENGTH, '\n');
             } else {
                 if (var == "xlength") file >> xlength;
@@ -71,6 +80,17 @@ Case::Case(std::string file_name, int argn, char **args) {
     }
     file.close();
 
+    // R1: validate that all required physical parameters were actually set and
+    //     are physically meaningful — catch missing/misspelled keys early.
+    if (nu <= 0.0)        { std::cerr << "Error: nu must be > 0 (got "      << nu      << ").\n"; std::exit(1); }
+    if (imax <= 0)        { std::cerr << "Error: imax must be > 0 (got "    << imax    << ").\n"; std::exit(1); }
+    if (jmax <= 0)        { std::cerr << "Error: jmax must be > 0 (got "    << jmax    << ").\n"; std::exit(1); }
+    if (xlength <= 0.0)   { std::cerr << "Error: xlength must be > 0 (got " << xlength << ").\n"; std::exit(1); }
+    if (ylength <= 0.0)   { std::cerr << "Error: ylength must be > 0 (got " << ylength << ").\n"; std::exit(1); }
+    if (_t_end  <= 0.0)   { std::cerr << "Error: t_end must be > 0 (got "   << _t_end  << ").\n"; std::exit(1); }
+    if (eps     <= 0.0)   { std::cerr << "Error: eps must be > 0 (got "     << eps     << ").\n"; std::exit(1); }
+    if (itermax <= 0)     { std::cerr << "Error: itermax must be > 0 (got " << itermax << ").\n"; std::exit(1); }
+
     std::map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
         wall_vel.insert(std::pair<int, double>(LidDrivenCavity::moving_wall_id, LidDrivenCavity::wall_velocity));
@@ -95,6 +115,8 @@ Case::Case(std::string file_name, int argn, char **args) {
     _pressure_solver = std::make_unique<SOR>(omg);
     _max_iter = itermax;
     _tolerance = eps;
+    _nu  = nu;
+    _omg = omg;
 
     // Construct boundaries
     if (not _grid.moving_wall_cells().empty()) {
@@ -107,44 +129,30 @@ Case::Case(std::string file_name, int argn, char **args) {
 }
 
 void Case::set_file_names(std::string file_name) {
-    std::string temp_dir;
-    bool case_name_flag = true;
-    bool prefix_flag = false;
+    // CQ2: use std::filesystem::path for portable, readable path decomposition
+    //      instead of the previous manual character-by-character reverse loop.
+    filesystem::path fp(file_name);
 
-    for (int i = file_name.size() - 1; i > -1; --i) {
-        if (file_name[i] == '/') {
-            case_name_flag = false;
-            prefix_flag = true;
-        }
-        if (case_name_flag) {
-            _case_name.push_back(file_name[i]);
-        }
-        if (prefix_flag) {
-            _prefix.push_back(file_name[i]);
-        }
-    }
+    // Stem = filename without extension, e.g. "LidDrivenCavity"
+    _case_name = fp.stem().string();
 
-    for (int i = file_name.size() - _case_name.size() - 1; i > -1; --i) {
-        temp_dir.push_back(file_name[i]);
-    }
+    // Parent directory + trailing separator, e.g. "../../example_cases/LidDrivenCavity/"
+    // Used to resolve a relative geometry file path supplied in the .dat file.
+    _prefix = fp.parent_path().string();
+    if (!_prefix.empty()) _prefix += '/';
 
-    std::reverse(_case_name.begin(), _case_name.end());
-    std::reverse(_prefix.begin(), _prefix.end());
-    std::reverse(temp_dir.begin(), temp_dir.end());
+    // Output directory: <parent>/<case_name>_Output
+    filesystem::path output_dir = fp.parent_path() / (_case_name + "_Output");
+    _dict_name = output_dir.string();
 
-    _case_name.erase(_case_name.size() - 4);
-    _dict_name = temp_dir;
-    _dict_name.append(_case_name);
-    _dict_name.append("_Output");
-
+    // Prepend parent directory to geometry file path if one was specified.
     if (_geom_name.compare("NONE") != 0) {
         _geom_name = _prefix + _geom_name;
     }
 
     // Create output directory
-    filesystem::path folder(_dict_name);
     try {
-        filesystem::create_directory(folder);
+        filesystem::create_directory(output_dir);
     } catch (const std::exception &e) {
         std::cerr << "Output directory could not be created." << std::endl;
         std::cerr << "Make sure that you have write permissions to the "
@@ -175,11 +183,153 @@ void Case::set_file_names(std::string file_name) {
  * For information about the classes and functions, you can check the header files.
  */
 void Case::simulate() {
-
-    double t = 0.0;
-    double dt = _field.dt();
-    int timestep = 0;
+    double t             = 0.0;
+    double dt            = _field.dt();
+    int    timestep      = 0;
+    int    vtk_count     = 0;
     double output_counter = 0.0;
+
+    // Bookkeeping for console output and the machine-readable SUMMARY line
+    int    last_sor_iter  = 0;
+    double last_sor_res   = 0.0;
+    long   total_sor_iter = 0;
+    int    max_sor_iter   = 0;
+    double total_res_sum  = 0.0;   // sum of achieved residuals for avg_res
+    double total_dt_sum   = 0.0;
+    bool   diverged       = false;
+
+    // ── Start-up header ────────────────────────────────────────────────────────
+    // Re = U*L/nu with U=1, L=1 (lid-driven cavity scaling)
+    double Re = (_nu > 0.0) ? (1.0 / _nu) : std::numeric_limits<double>::infinity();
+    std::cout
+        << "\n============================================================\n"
+        << " Fluidchen CFD Solver  —  " << _case_name << "\n"
+        << "============================================================\n"
+        << std::fixed << std::setprecision(4)
+        << "  Grid    : " << _grid.size_x() << " x " << _grid.size_y()
+        << "  (dx=" << _grid.dx() << "  dy=" << _grid.dy() << ")\n"
+        << "  nu      : " << _nu << "   Re ~ " << std::setprecision(0) << Re << "\n"
+        << std::setprecision(2)
+        << "  t_end   : " << _t_end << "   output every " << _output_freq << " time units\n";
+
+    if (_field.tau() > 0.0)
+        std::cout << "  dt      : adaptive (tau=" << _field.tau()
+                  << ")   initial dt = " << std::setprecision(6) << dt << "\n";
+    else
+        std::cout << "  dt      : FIXED = " << std::setprecision(6) << dt
+                  << "   (adaptive disabled — tau <= 0)\n";
+
+    std::cout
+        << "  SOR     : omega=" << std::setprecision(2) << _omg
+        << "   itermax=" << _max_iter
+        << "   eps=" << std::scientific << std::setprecision(2) << _tolerance << "\n"
+        << "  Output  : " << _dict_name << "/\n"
+        << "------------------------------------------------------------\n"
+        << std::flush;
+
+    // ── Initial state ──────────────────────────────────────────────────────────
+    output_vtk(timestep);
+    vtk_count++;
+
+    // ── Main loop (Chorin Projection / fractional-step method) ────────────────
+    while (t < _t_end) {
+
+        // Step 1: Velocity BCs (ghost cells, moving lid)
+        for (auto &boundary : _boundaries)
+            boundary->applyVelocity(_field);
+
+        // Step 2: Intermediate fluxes F and G (Eq. 9 & 10)
+        _field.calculate_fluxes(_grid);
+
+        // Step 3: Flux BCs at walls
+        for (auto &boundary : _boundaries)
+            boundary->applyFlux(_field);
+
+        // Step 4: RHS of pressure Poisson equation (Eq. 11)
+        _field.calculate_rs(_grid);
+
+        // Step 5: SOR pressure solve — iterate until res < eps or itermax reached
+        int    iter     = 0;
+        double residual = std::numeric_limits<double>::max();
+        while (iter < _max_iter && residual > _tolerance) {
+            residual = _pressure_solver->solve(_field, _grid, _boundaries);
+            for (auto &boundary : _boundaries)
+                boundary->applyPressure(_field);
+            ++iter;
+        }
+        last_sor_iter  = iter;
+        last_sor_res   = residual;
+        total_sor_iter += iter;
+        total_res_sum  += residual;
+        if (iter > max_sor_iter) max_sor_iter = iter;
+
+        // Divergence check — NaN/Inf residual or runaway values signal instability
+        if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
+            ++timestep;  // count this step so avg_sor = total_iter / total_steps is bounded by itermax
+            std::cout
+                << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t
+                << "  step=" << timestep
+                << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n"
+                << "           Possible cause: dt too large (CFL violation).\n"
+                << "           Try smaller dt, or enable adaptive stepping (tau > 0).\n";
+            diverged = true;
+            break;
+        }
+
+        // Step 6: Correct velocities using updated pressure (Eq. 7 & 8)
+        _field.calculate_velocities(_grid);
+
+        // Step 7: Compute adaptive dt for the next step (Eqs. 12 & 13)
+        dt = _field.calculate_dt(_grid);
+        total_dt_sum += dt;
+
+        t += dt;
+        ++timestep;
+        output_counter += dt;
+
+        // Step 8: VTK output + progress line at each output interval
+        if (output_counter >= _output_freq) {
+            output_vtk(timestep);
+            vtk_count++;
+            output_counter -= _output_freq;
+
+            std::cout
+                << "  [vtk=" << std::setw(3) << vtk_count
+                << " | t=" << std::fixed << std::setprecision(3) << std::setw(8) << t
+                << " | step=" << std::setw(6) << timestep
+                << " | dt=" << std::scientific << std::setprecision(2) << dt
+                << " | SOR: iter=" << std::setw(3) << last_sor_iter
+                << "  res=" << std::setprecision(2) << last_sor_res
+                << "]\n" << std::flush;
+        }
+    }
+
+    // ── Final summary ─────────────────────────────────────────────────────────
+    double avg_sor = (timestep > 0) ? static_cast<double>(total_sor_iter) / timestep : 0.0;
+    double avg_res = (timestep > 0) ? total_res_sum / timestep : last_sor_res;
+    double avg_dt  = (timestep > 0) ? total_dt_sum / timestep : dt;
+
+    std::cout
+        << "------------------------------------------------------------\n"
+        << "  Done: t=" << std::fixed << std::setprecision(3) << t
+        << "  steps=" << timestep << "  VTK files=" << vtk_count << "\n"
+        << "  SOR : avg=" << std::fixed << std::setprecision(1) << avg_sor
+        << "  max=" << max_sor_iter
+        << "  avg_dt=" << std::scientific << std::setprecision(2) << avg_dt
+        << "\n\n";
+
+    // One-line machine-readable summary (parsed by run_studies.py)
+    std::cout
+        << "SUMMARY"
+        << " t="       << std::fixed     << std::setprecision(3) << t
+        << " steps="   << timestep
+        << " vtk="     << vtk_count
+        << " avg_sor=" << std::fixed      << std::setprecision(1) << avg_sor
+        << " max_sor=" << max_sor_iter
+        << " avg_res=" << std::scientific << std::setprecision(2) << avg_res
+        << " avg_dt="  << std::scientific << std::setprecision(2) << avg_dt
+        << " status="  << (diverged ? "DIVERGED" : "OK")
+        << "\n";
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
@@ -269,6 +419,14 @@ void Case::output_vtk(int timestep, int my_rank) {
     writer->SetFileName(outputname.c_str());
     writer->SetInputData(structuredGrid);
     writer->Write();
+
+    // R3: verify the file was actually created — catches silent failures due to
+    //     disk-full conditions or permission errors (vtkStructuredGridWriter
+    //     returns void and does not throw on failure).
+    if (!filesystem::exists(outputname)) {
+        std::cerr << "Warning: VTK output file was not created: " << outputname << "\n"
+                  << "         Check available disk space and write permissions.\n";
+    }
 }
 
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain) {

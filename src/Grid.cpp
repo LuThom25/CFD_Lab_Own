@@ -24,16 +24,21 @@ Grid::Grid(std::string geom_name, Domain &domain) {
 }
 
 void Grid::build_lid_driven_cavity() {
-    std::vector<std::vector<int>> geometry_data(_domain.domain_imax + 2, std::vector<int>(_domain.domain_jmax + 2, 0));
+    // CQ4: named constant for the ghost-cell layer width; avoids magic +1/+2 literals.
+    constexpr int GHOST = 1;
 
-    for (int i = 0; i < _domain.domain_imax + 2; ++i) {
-        for (int j = 0; j < _domain.domain_jmax + 2; ++j) {
-            // Bottom, left and right walls: no-slip
-            if (i == 0 || j == 0 || i == _domain.domain_imax + 1) {
+    std::vector<std::vector<int>> geometry_data(_domain.domain_imax + 2 * GHOST,
+                                                std::vector<int>(_domain.domain_jmax + 2 * GHOST, 0));
+
+    // P1: j outer, i inner matches column-major _cells storage (sequential i access).
+    for (int j = 0; j < _domain.domain_jmax + 2 * GHOST; ++j) {
+        for (int i = 0; i < _domain.domain_imax + 2 * GHOST; ++i) {
+            // Bottom, left and right walls: no-slip fixed wall
+            if (i == 0 || j == 0 || i == _domain.domain_imax + GHOST) {
                 geometry_data.at(i).at(j) = LidDrivenCavity::fixed_wall_id;
             }
-            // Top wall: moving wall
-            else if (j == _domain.domain_jmax + 1) {
+            // Top wall: moving lid
+            else if (j == _domain.domain_jmax + GHOST) {
                 geometry_data.at(i).at(j) = LidDrivenCavity::moving_wall_id;
             }
         }
@@ -182,8 +187,10 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     }
 
     // Inner cells
-    for (int i = 1; i < _domain.size_x + 1; ++i) {
-        for (int j = 1; j < _domain.size_y + 1; ++j) {
+    // P1: j outer, i inner — matches column-major Matrix storage so that
+    // _cells(i,j) accesses are sequential in memory as i increments.
+    for (int j = 1; j < _domain.size_y + 1; ++j) {
+        for (int i = 1; i < _domain.size_x + 1; ++i) {
             _cells(i, j).set_neighbour(&_cells(i + 1, j), border_position::RIGHT);
             _cells(i, j).set_neighbour(&_cells(i - 1, j), border_position::LEFT);
             _cells(i, j).set_neighbour(&_cells(i, j + 1), border_position::TOP);
@@ -232,9 +239,18 @@ void Grid::parse_geometry_file(std::string filedoc, std::vector<std::vector<int>
     ss >> depth;
 
     // Following lines : data (origin of x-y coordinate system in bottom-left corner)
+    // R2: check stream state after each read so a truncated/malformed PGM file
+    //     produces a clear error instead of silently leaving cells at their
+    //     default value (0 = fluid), which would give wrong boundary conditions.
     for (int y = num_cells_in_y - 1; y > -1; --y) {
         for (int x = 0; x < num_cells_in_x; ++x) {
-            ss >> geometry_data[x][y];
+            if (!(ss >> geometry_data[x][y])) {
+                std::cerr << "Error: unexpected end of geometry file at pixel ("
+                          << x << ", " << y << "). "
+                          << "Check that the PGM dimensions match the grid size.\n";
+                infile.close();
+                return;
+            }
         }
     }
 

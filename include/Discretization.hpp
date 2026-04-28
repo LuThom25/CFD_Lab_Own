@@ -83,4 +83,7 @@ class Discretization {
     static double _dx;
     static double _dy;
     static double _gamma;
+    // P3: precomputed reciprocals avoid repeated division in every stencil call.
+    static double _dx2_inv; ///< 1.0 / (dx * dx)
+    static double _dy2_inv; ///< 1.0 / (dy * dy)
 };
