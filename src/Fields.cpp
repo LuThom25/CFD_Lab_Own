@@ -58,7 +58,7 @@ void Fields::calculate_rs(Grid &grid) {
     // to have a solution, the RHS must satisfy Σ RS = 0 (Fredholm alternative).
     // Subtract the mean to enforce this, correcting any residual flux imbalance.
     const auto &cells = grid.fluid_cells();
-    const std::size_t N = cells.size();
+    const size_t N = cells.size();
     if (N == 0) return;
     double sum = 0.0;
     for (auto cell : cells) sum += _RS(cell->i(), cell->j());

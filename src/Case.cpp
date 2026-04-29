@@ -25,22 +25,23 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    double nu{};      /* viscosity   */
-    double UI{};      /* velocity x-direction */
-    double VI{};      /* velocity y-direction */
-    double PI{};      /* pressure */
-    double GX{};      /* gravitation x-direction */
-    double GY{};      /* gravitation y-direction */
-    double xlength{}; /* length of the domain x-dir.*/
-    double ylength{}; /* length of the domain y-dir.*/
-    double dt{};      /* time step */
-    int imax{};       /* number of cells x-direction*/
-    int jmax{};       /* number of cells y-direction*/
-    double gamma{};   /* uppwind differencing factor*/
-    double omg{};     /* relaxation factor */
-    double tau{};     /* safety factor for time step*/
-    int itermax{};    /* max. number of iterations for pressure per time step */
-    double eps{};     /* accuracy bound for pressure*/
+    double nu{};                          /* viscosity   */
+    double UI{};                          /* velocity x-direction */
+    double VI{};                          /* velocity y-direction */
+    double PI{};                          /* pressure */
+    double GX{};                          /* gravitation x-direction */
+    double GY{};                          /* gravitation y-direction */
+    double xlength{};                     /* length of the domain x-dir.*/
+    double ylength{};                     /* length of the domain y-dir.*/
+    double dt{};                          /* time step */
+    int imax{};                           /* number of cells x-direction*/
+    int jmax{};                           /* number of cells y-direction*/
+    double gamma{};                       /* uppwind differencing factor*/
+    double omg{};                         /* relaxation factor */
+    double tau{};                         /* safety factor for time step*/
+    int itermax{};                        /* max. number of iterations for pressure per time step */
+    double eps{};                         /* accuracy bound for pressure*/
+    solver_type solver{solver_type::SOR}; /* type of solver */
 
     // R1: fail fast if the input file cannot be opened.
     if (!file.is_open()) {
@@ -75,6 +76,18 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 if (var == "itermax") file >> itermax;
                 if (var == "imax") file >> imax;
                 if (var == "jmax") file >> jmax;
+                if (var == "solver") {
+                    std::string solver_str;
+                    file >> solver_str;
+                    if (solver_str == "SOR")
+                        solver = solver_type::SOR;
+                    else if (solver_str == "SOR_RB")
+                        solver = solver_type::SOR_RB;
+                    else {
+                        std::cerr << "Error: unknown solver type '" << solver_str << "'.\n";
+                        std::exit(1);
+                    }
+                }
             }
         }
     }
@@ -82,14 +95,38 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
 
     // R1: validate that all required physical parameters were actually set and
     //     are physically meaningful — catch missing/misspelled keys early.
-    if (nu <= 0.0)        { std::cerr << "Error: nu must be > 0 (got "      << nu      << ").\n"; std::exit(1); }
-    if (imax <= 0)        { std::cerr << "Error: imax must be > 0 (got "    << imax    << ").\n"; std::exit(1); }
-    if (jmax <= 0)        { std::cerr << "Error: jmax must be > 0 (got "    << jmax    << ").\n"; std::exit(1); }
-    if (xlength <= 0.0)   { std::cerr << "Error: xlength must be > 0 (got " << xlength << ").\n"; std::exit(1); }
-    if (ylength <= 0.0)   { std::cerr << "Error: ylength must be > 0 (got " << ylength << ").\n"; std::exit(1); }
-    if (_t_end  <= 0.0)   { std::cerr << "Error: t_end must be > 0 (got "   << _t_end  << ").\n"; std::exit(1); }
-    if (eps     <= 0.0)   { std::cerr << "Error: eps must be > 0 (got "     << eps     << ").\n"; std::exit(1); }
-    if (itermax <= 0)     { std::cerr << "Error: itermax must be > 0 (got " << itermax << ").\n"; std::exit(1); }
+    if (nu <= 0.0) {
+        std::cerr << "Error: nu must be > 0 (got " << nu << ").\n";
+        std::exit(1);
+    }
+    if (imax <= 0) {
+        std::cerr << "Error: imax must be > 0 (got " << imax << ").\n";
+        std::exit(1);
+    }
+    if (jmax <= 0) {
+        std::cerr << "Error: jmax must be > 0 (got " << jmax << ").\n";
+        std::exit(1);
+    }
+    if (xlength <= 0.0) {
+        std::cerr << "Error: xlength must be > 0 (got " << xlength << ").\n";
+        std::exit(1);
+    }
+    if (ylength <= 0.0) {
+        std::cerr << "Error: ylength must be > 0 (got " << ylength << ").\n";
+        std::exit(1);
+    }
+    if (_t_end <= 0.0) {
+        std::cerr << "Error: t_end must be > 0 (got " << _t_end << ").\n";
+        std::exit(1);
+    }
+    if (eps <= 0.0) {
+        std::cerr << "Error: eps must be > 0 (got " << eps << ").\n";
+        std::exit(1);
+    }
+    if (itermax <= 0) {
+        std::cerr << "Error: itermax must be > 0 (got " << itermax << ").\n";
+        std::exit(1);
+    }
 
     std::map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
@@ -112,10 +149,14 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
-    _pressure_solver = std::make_unique<SOR>(omg);
+    if (solver == solver_type::SOR) {
+        _pressure_solver = std::make_unique<SOR>(omg);
+    } else if (solver == solver_type::SOR_RB) {
+        _pressure_solver = std::make_unique<SOR_RB>(omg);
+    }
     _max_iter = itermax;
     _tolerance = eps;
-    _nu  = nu;
+    _nu = nu;
     _omg = omg;
 
     // Construct boundaries
@@ -183,49 +224,44 @@ void Case::set_file_names(std::string file_name) {
  * For information about the classes and functions, you can check the header files.
  */
 void Case::simulate() {
-    double t             = 0.0;
-    double dt            = _field.dt();
-    int    timestep      = 0;
-    int    vtk_count     = 0;
+    double t = 0.0;
+    double dt = _field.dt();
+    int timestep = 0;
+    int vtk_count = 0;
     double output_counter = 0.0;
 
     // Bookkeeping for console output and the machine-readable SUMMARY line
-    int    last_sor_iter  = 0;
-    double last_sor_res   = 0.0;
-    long   total_sor_iter = 0;
-    int    max_sor_iter   = 0;
-    double total_res_sum  = 0.0;   // sum of achieved residuals for avg_res
-    double total_dt_sum   = 0.0;
-    bool   diverged       = false;
+    int last_sor_iter = 0;
+    double last_sor_res = 0.0;
+    long total_sor_iter = 0;
+    int max_sor_iter = 0;
+    double total_res_sum = 0.0; // sum of achieved residuals for avg_res
+    double total_dt_sum = 0.0;
+    bool diverged = false;
 
     // ── Start-up header ────────────────────────────────────────────────────────
     // Re = U*L/nu with U=1, L=1 (lid-driven cavity scaling)
     double Re = (_nu > 0.0) ? (1.0 / _nu) : std::numeric_limits<double>::infinity();
-    std::cout
-        << "\n============================================================\n"
-        << " Fluidchen CFD Solver  —  " << _case_name << "\n"
-        << "============================================================\n"
-        << std::fixed << std::setprecision(4)
-        << "  Grid    : " << _grid.size_x() << " x " << _grid.size_y()
-        << "  (dx=" << _grid.dx() << "  dy=" << _grid.dy() << ")\n"
-        << "  nu      : " << _nu << "   Re ~ " << std::setprecision(0) << Re << "\n"
-        << std::setprecision(2)
-        << "  t_end   : " << _t_end << "   output every " << _output_freq << " time units\n";
+    std::cout << "\n============================================================\n"
+              << " Fluidchen CFD Solver  —  " << _case_name << "\n"
+              << "============================================================\n"
+              << std::fixed << std::setprecision(4) << "  Grid    : " << _grid.size_x() << " x " << _grid.size_y()
+              << "  (dx=" << _grid.dx() << "  dy=" << _grid.dy() << ")\n"
+              << "  nu      : " << _nu << "   Re ~ " << std::setprecision(0) << Re << "\n"
+              << std::setprecision(2) << "  t_end   : " << _t_end << "   output every " << _output_freq
+              << " time units\n";
 
     if (_field.tau() > 0.0)
-        std::cout << "  dt      : adaptive (tau=" << _field.tau()
-                  << ")   initial dt = " << std::setprecision(6) << dt << "\n";
+        std::cout << "  dt      : adaptive (tau=" << _field.tau() << ")   initial dt = " << std::setprecision(6) << dt
+                  << "\n";
     else
-        std::cout << "  dt      : FIXED = " << std::setprecision(6) << dt
-                  << "   (adaptive disabled — tau <= 0)\n";
+        std::cout << "  dt      : FIXED = " << std::setprecision(6) << dt << "   (adaptive disabled — tau <= 0)\n";
 
-    std::cout
-        << "  SOR     : omega=" << std::setprecision(2) << _omg
-        << "   itermax=" << _max_iter
-        << "   eps=" << std::scientific << std::setprecision(2) << _tolerance << "\n"
-        << "  Output  : " << _dict_name << "/\n"
-        << "------------------------------------------------------------\n"
-        << std::flush;
+    std::cout << "  SOR     : omega=" << std::setprecision(2) << _omg << "   itermax=" << _max_iter
+              << "   eps=" << std::scientific << std::setprecision(2) << _tolerance << "\n"
+              << "  Output  : " << _dict_name << "/\n"
+              << "------------------------------------------------------------\n"
+              << std::flush;
 
     // ── Initial state ──────────────────────────────────────────────────────────
     output_vtk(timestep);
@@ -249,7 +285,7 @@ void Case::simulate() {
         _field.calculate_rs(_grid);
 
         // Step 5: SOR pressure solve — iterate until res < eps or itermax reached
-        int    iter     = 0;
+        int iter = 0;
         double residual = std::numeric_limits<double>::max();
         while (iter < _max_iter && residual > _tolerance) {
             residual = _pressure_solver->solve(_field, _grid, _boundaries);
@@ -257,21 +293,19 @@ void Case::simulate() {
                 boundary->applyPressure(_field);
             ++iter;
         }
-        last_sor_iter  = iter;
-        last_sor_res   = residual;
+        last_sor_iter = iter;
+        last_sor_res = residual;
         total_sor_iter += iter;
-        total_res_sum  += residual;
+        total_res_sum += residual;
         if (iter > max_sor_iter) max_sor_iter = iter;
 
         // Divergence check — NaN/Inf residual or runaway values signal instability
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
-            ++timestep;  // count this step so avg_sor = total_iter / total_steps is bounded by itermax
-            std::cout
-                << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t
-                << "  step=" << timestep
-                << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n"
-                << "           Possible cause: dt too large (CFL violation).\n"
-                << "           Try smaller dt, or enable adaptive stepping (tau > 0).\n";
+            ++timestep; // count this step so avg_sor = total_iter / total_steps is bounded by itermax
+            std::cout << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t << "  step=" << timestep
+                      << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n"
+                      << "           Possible cause: dt too large (CFL violation).\n"
+                      << "           Try smaller dt, or enable adaptive stepping (tau > 0).\n";
             diverged = true;
             break;
         }
@@ -293,43 +327,31 @@ void Case::simulate() {
             vtk_count++;
             output_counter -= _output_freq;
 
-            std::cout
-                << "  [vtk=" << std::setw(3) << vtk_count
-                << " | t=" << std::fixed << std::setprecision(3) << std::setw(8) << t
-                << " | step=" << std::setw(6) << timestep
-                << " | dt=" << std::scientific << std::setprecision(2) << dt
-                << " | SOR: iter=" << std::setw(3) << last_sor_iter
-                << "  res=" << std::setprecision(2) << last_sor_res
-                << "]\n" << std::flush;
+            std::cout << "  [vtk=" << std::setw(3) << vtk_count << " | t=" << std::fixed << std::setprecision(3)
+                      << std::setw(8) << t << " | step=" << std::setw(6) << timestep << " | dt=" << std::scientific
+                      << std::setprecision(2) << dt << " | SOR: iter=" << std::setw(3) << last_sor_iter
+                      << "  res=" << std::setprecision(2) << last_sor_res << "]\n"
+                      << std::flush;
         }
     }
 
     // ── Final summary ─────────────────────────────────────────────────────────
     double avg_sor = (timestep > 0) ? static_cast<double>(total_sor_iter) / timestep : 0.0;
     double avg_res = (timestep > 0) ? total_res_sum / timestep : last_sor_res;
-    double avg_dt  = (timestep > 0) ? total_dt_sum / timestep : dt;
+    double avg_dt = (timestep > 0) ? total_dt_sum / timestep : dt;
 
-    std::cout
-        << "------------------------------------------------------------\n"
-        << "  Done: t=" << std::fixed << std::setprecision(3) << t
-        << "  steps=" << timestep << "  VTK files=" << vtk_count << "\n"
-        << "  SOR : avg=" << std::fixed << std::setprecision(1) << avg_sor
-        << "  max=" << max_sor_iter
-        << "  avg_dt=" << std::scientific << std::setprecision(2) << avg_dt
-        << "\n\n";
+    std::cout << "------------------------------------------------------------\n"
+              << "  Done: t=" << std::fixed << std::setprecision(3) << t << "  steps=" << timestep
+              << "  VTK files=" << vtk_count << "\n"
+              << "  SOR : avg=" << std::fixed << std::setprecision(1) << avg_sor << "  max=" << max_sor_iter
+              << "  avg_dt=" << std::scientific << std::setprecision(2) << avg_dt << "\n\n";
 
     // One-line machine-readable summary (parsed by run_studies.py)
-    std::cout
-        << "SUMMARY"
-        << " t="       << std::fixed     << std::setprecision(3) << t
-        << " steps="   << timestep
-        << " vtk="     << vtk_count
-        << " avg_sor=" << std::fixed      << std::setprecision(1) << avg_sor
-        << " max_sor=" << max_sor_iter
-        << " avg_res=" << std::scientific << std::setprecision(2) << avg_res
-        << " avg_dt="  << std::scientific << std::setprecision(2) << avg_dt
-        << " status="  << (diverged ? "DIVERGED" : "OK")
-        << "\n";
+    std::cout << "SUMMARY"
+              << " t=" << std::fixed << std::setprecision(3) << t << " steps=" << timestep << " vtk=" << vtk_count
+              << " avg_sor=" << std::fixed << std::setprecision(1) << avg_sor << " max_sor=" << max_sor_iter
+              << " avg_res=" << std::scientific << std::setprecision(2) << avg_res << " avg_dt=" << std::scientific
+              << std::setprecision(2) << avg_dt << " status=" << (diverged ? "DIVERGED" : "OK") << "\n";
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
@@ -345,13 +367,19 @@ void Case::output_vtk(int timestep, int my_rank) {
     double x = _grid.domain().iminb * dx;
     double y = _grid.domain().jminb * dy;
 
-    { y += dy; }
-    { x += dx; }
+    {
+        y += dy;
+    }
+    {
+        x += dx;
+    }
 
     double z = 0;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
         x = _grid.domain().iminb * dx;
-        { x += dx; }
+        {
+            x += dx;
+        }
         for (int row = 0; row < _grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
             x += dx;
@@ -374,7 +402,7 @@ void Case::output_vtk(int timestep, int my_rank) {
     Velocity->SetNumberOfComponents(3);
 
     // Temp Velocity
-    float vel[3];
+    std::array<double, 3> vel;
     vel[2] = 0; // Set z component to 0
 
     // Print pressure, velocity and temperature from bottom to top
@@ -384,7 +412,7 @@ void Case::output_vtk(int timestep, int my_rank) {
             Pressure->InsertNextTuple(&pressure);
             vel[0] = (_field.u(i - 1, j) + _field.u(i, j)) * 0.5;
             vel[1] = (_field.v(i, j - 1) + _field.v(i, j)) * 0.5;
-            Velocity->InsertNextTuple(vel);
+            Velocity->InsertNextTuple(vel.data());
         }
     }
 
@@ -398,7 +426,7 @@ void Case::output_vtk(int timestep, int my_rank) {
         for (int i = 0; i < _grid.domain().size_x + 1; i++) {
             vel[0] = (_field.u(i, j) + _field.u(i, j + 1)) * 0.5;
             vel[1] = (_field.v(i, j) + _field.v(i + 1, j)) * 0.5;
-            VelocityPoints->InsertNextTuple(vel);
+            VelocityPoints->InsertNextTuple(vel.data());
         }
     }
 

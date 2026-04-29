@@ -47,7 +47,6 @@ void Grid::build_lid_driven_cavity() {
 }
 
 void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
-
     int i = 0;
     int j = 0;
 
@@ -273,3 +272,5 @@ const std::vector<Cell *> &Grid::fluid_cells() const { return _fluid_cells; }
 const std::vector<Cell *> &Grid::fixed_wall_cells() const { return _fixed_wall_cells; }
 
 const std::vector<Cell *> &Grid::moving_wall_cells() const { return _moving_wall_cells; }
+
+Matrix<Cell> &Grid::cells() { return _cells; }

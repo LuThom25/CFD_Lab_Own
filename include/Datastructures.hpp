@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Util.hpp"
+
 #include <vector>
 
 /**
@@ -10,7 +12,7 @@
 template <typename T> class Matrix {
 
   public:
-    Matrix<T>() = default;
+    Matrix() = default;
 
     /**
      * @brief Constructor with initial value
@@ -20,7 +22,7 @@ template <typename T> class Matrix {
      * @param[in] initial value for the elements
      *
      */
-    Matrix<T>(int num_cols, int num_rows, double init_val) : _num_cols(num_cols), _num_rows(num_rows) {
+    Matrix(int num_cols, int num_rows, double init_val) : _num_cols(num_cols), _num_rows(num_rows) {
         _container.resize(num_cols * num_rows);
         std::fill(_container.begin(), _container.end(), init_val);
     }
@@ -32,7 +34,7 @@ template <typename T> class Matrix {
      * @param[in] number of elements in y direction
      *
      */
-    Matrix<T>(int num_cols, int num_rows) : _num_cols(num_cols), _num_rows(num_rows) {
+    Matrix(int num_cols, int num_rows) : _num_cols(num_cols), _num_rows(num_rows) {
         _container.resize(num_cols * num_rows);
     }
 
@@ -64,8 +66,8 @@ template <typename T> class Matrix {
      * @param[in] y index
      * @param[out] reference / value of the element
      */
-    T &fast(int i, int j) { return _container[_num_cols * j + i]; }
-    T fast(int i, int j) const { return _container[_num_cols * j + i]; }
+    HOT INLINE NOTHROW inline T &fast(int i, int j) { return _container[_num_cols * j + i]; }
+    HOT INLINE NOTHROW inline T fast(int i, int j) const { return _container[_num_cols * j + i]; }
 
     /**
      * @brief Pointer representation of underlying data

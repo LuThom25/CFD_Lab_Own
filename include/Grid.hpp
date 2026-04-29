@@ -10,6 +10,7 @@
 #include "Datastructures.hpp"
 #include "Domain.hpp"
 #include "Enums.hpp"
+#include "Util.hpp"
 
 /**
  * @brief Data structure holds cells and related sub-containers
@@ -64,6 +65,13 @@ class Grid {
      * @param[out] vector of fixed wall cells
      */
     const std::vector<Cell *> &fixed_wall_cells() const;
+
+    /**
+     * @brief Access to all cells (including ghost cells)
+     * 
+     * @param[out] matrix of all cells
+     */
+    Matrix<Cell> &cells();
 
   private:
     /**@brief Default lid driven cavity case generator
