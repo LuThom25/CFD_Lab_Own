@@ -24,3 +24,8 @@ enum class cell_type {
     MOVING_WALL,
     DEFAULT,
 };
+
+enum class solver_type {
+    SOR,
+    SOR_RB,
+};

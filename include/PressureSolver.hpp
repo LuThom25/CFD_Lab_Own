@@ -81,3 +81,35 @@ class SOR_Iciar : public PressureSolver {
   private:
     double _omega;
 };
+
+/**
+ * @brief Red-Black Successive Over-Relaxation solver.
+ *        Cells are updated in a checkerboard pattern (red first, then black),
+ *        which decouples neighbouring updates within each colour pass and
+ *        allows straightforward OpenMP parallelisation in future.
+ */
+class SOR_RB : public PressureSolver {
+  public:
+    SOR_RB() = default;
+
+    /**
+     * @brief Constructor of SOR_RB solver
+     *
+     * @param[in] omega  relaxation factor
+     */
+    SOR_RB(double omega);
+
+    virtual ~SOR_RB() = default;
+
+    /**
+     * @brief Solve the pressure equation on given field, grid and boundary
+     *
+     * @param[in] field to be used
+     * @param[in] grid  to be used
+     * @param[in] boundaries to be used
+     */
+    virtual double solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries);
+
+  private:
+    double _omega;
+};
