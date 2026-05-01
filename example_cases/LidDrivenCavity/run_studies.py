@@ -182,10 +182,12 @@ BASE_CFG = dict(
     dt=0.05,     t_end=5.0,   tau=0.5,
     dt_value=999,              # suppress VTK output during studies (speed)
     eps=0.001,   omg=1.7,     gamma=0.5,  itermax=100,
+    solver=_ACTIVE_SOLVER,     # forwarded from LidDrivenCavity.dat to every task
+    # solver must NOT be the last entry — the C++ parser fails to read the value
+    # when solver is at EOF with no tokens following it. Keep nu/GX/... after it.
     nu=0.01,
     GX=0.0,      GY=0.0,
     PI=0.0,      UI=0.0,      VI=0.0,
-    solver=_ACTIVE_SOLVER,     # forwarded from LidDrivenCavity.dat to every task
 )
 
 # ── Utility: write a .dat file ────────────────────────────────────────────────
