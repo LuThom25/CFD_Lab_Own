@@ -517,8 +517,8 @@ def task5():
     ax.set_ylim(4e-4, max(res_vals) * 6)   # headroom so labels never clip
     ax.set_xlabel("Relaxation factor ω")
     ax.set_ylabel("Avg SOR residual  [log scale]")
-    ax.set_title("Task 5a — SOR Residual vs. Relaxation Factor ω\n"
-                 "(itermax=500, 50×50 grid, Re=100)")
+    ax.set_title(f"Task 5a — SOR Residual vs. Relaxation Factor ω\n"
+                 f"(itermax=500, 50×50 grid, Re=100, solver={_ACTIVE_SOLVER})")
     green_patch = mpatches.Patch(color="tab:green", label=f"Best ω = {best_omg}")
     ax.legend(handles=[green_patch,
                        mpatches.Patch(color="purple", label="ε = 0.001")])
@@ -600,7 +600,7 @@ def task5():
     ax2.set_title("Residual vs. itermax\n(accuracy — log scale)")
     ax2.legend()
 
-    fig.suptitle(f"Task 5b — Effect of itermax  (ω={best_omg}, 50×50, Re=100)", fontsize=12)
+    fig.suptitle(f"Task 5b — Effect of itermax  (ω={best_omg}, 50×50, Re=100, solver={_ACTIVE_SOLVER})", fontsize=12)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task5b_itermax.png")
     plt.close(fig)
@@ -696,7 +696,7 @@ def task6():
     ax2.set_title("CFL and Viscous Stability Fractions")
     ax2.legend(fontsize=9)
 
-    fig.suptitle("Task 6 — Fixed Time Step Stability  (50×50, nu=0.01)", fontsize=12)
+    fig.suptitle(f"Task 6 — Fixed Time Step Stability  (50×50, nu=0.01, solver={_ACTIVE_SOLVER})", fontsize=12)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task6_dt_stability.png")
     plt.close(fig)
@@ -836,7 +836,7 @@ def task7():
     ax2.set_title("Avg SOR Iterations per Grid  (itermax=100)")
     ax2.legend(handles=[green_p, red_p])
 
-    fig.suptitle("Task 7 — Grid Refinement Study  (fixed dt=0.05, nu=0.001, Re=1000, itermax=100)", fontsize=12)
+    fig.suptitle(f"Task 7 — Grid Refinement Study  (fixed dt=0.05, nu=0.001, Re=1000, itermax=100, solver={_ACTIVE_SOLVER})", fontsize=12)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task7_grid_refinement.png")
     plt.close(fig)
@@ -980,7 +980,7 @@ def task8():
     ax2.set_title("SOR Iterations vs. Re")
     ax2.legend()
 
-    fig.suptitle("Task 8 — Viscosity / Reynolds Number Study  (50×50, adaptive dt, t_end=50)", fontsize=11)
+    fig.suptitle(f"Task 8 — Viscosity / Reynolds Number Study  (50×50, adaptive dt, t_end=50, solver={_ACTIVE_SOLVER})", fontsize=11)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "task8_viscosity_study.png")
     plt.close(fig)
