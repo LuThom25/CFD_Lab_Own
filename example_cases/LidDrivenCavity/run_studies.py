@@ -146,6 +146,35 @@ SUMMARY_RE = re.compile(
     r"avg_dt=([\d.eE+\-]+)\s+(?:solver=\S+\s+)?status=(\w+)"
 )
 
+# ── Read solver selection from LidDrivenCavity.dat ────────────────────────────
+# The .dat file contains a "solver" field that selects which pressure Poisson
+# solver to use.  We read it here so that ALL tasks (4-8) automatically use
+# whichever solver is set in the config file.
+#
+# Available solvers (set in LidDrivenCavity.dat):
+#   solver  SOR        - Standard Successive Over-Relaxation  (with zero-mean projection)
+#   solver  SOR_RB     - Red-Black SOR  (checkerboard, parallelisation-ready)
+#   solver  SOR_ICIAR  - SOR variant by Iciar
+#   (omit line)        - defaults to SOR
+_DAT_FILE = SCRIPT_DIR / "LidDrivenCavity.dat"
+
+def _read_solver_from_dat(dat_path: Path) -> str:
+    """Parse the 'solver' field from a .dat file.  Returns 'SOR' if not found."""
+    if not dat_path.exists():
+        return "SOR"
+    for line in dat_path.read_text().splitlines():
+        stripped = line.strip()
+        # Skip blank lines and comments
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) >= 2 and parts[0].lower() == "solver":
+            return parts[1].upper()   # e.g. "SOR_RB"
+    return "SOR"
+
+_ACTIVE_SOLVER = _read_solver_from_dat(_DAT_FILE)
+print(f"[run_studies] Solver read from LidDrivenCavity.dat: {_ACTIVE_SOLVER}")
+
 # ── Base configuration (worksheet defaults) ───────────────────────────────────
 BASE_CFG = dict(
     xlength=1.0, ylength=1.0,
@@ -156,6 +185,7 @@ BASE_CFG = dict(
     nu=0.01,
     GX=0.0,      GY=0.0,
     PI=0.0,      UI=0.0,      VI=0.0,
+    solver=_ACTIVE_SOLVER,     # forwarded from LidDrivenCavity.dat to every task
 )
 
 # ── Utility: write a .dat file ────────────────────────────────────────────────
@@ -972,6 +1002,7 @@ def main():
     print("  Worksheet 1 — Simulation Tasks 4–8")
     print(f"  Binary : {BINARY}")
     print(f"  Plots  : {PLOTS_DIR}")
+    print(f"  Solver : {_ACTIVE_SOLVER}  (set in LidDrivenCavity.dat)")
     print("=" * 66)
 
     if 4 in tasks: task4()
