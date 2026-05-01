@@ -70,6 +70,8 @@ class Case {
     double _nu{0.0};
     /// SOR relaxation factor (stored for console output)
     double _omg{0.0};
+    /// Name of the active pressure solver (stored for console output)
+    std::string _solver_name{"SOR"};
 
     /**
      * @brief Creating file names from given input data file

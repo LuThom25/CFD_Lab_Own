@@ -154,10 +154,13 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     if (solver == solver_type::SOR) {
         _pressure_solver = std::make_unique<SOR>(omg);
+        _solver_name = "SOR";
     } else if (solver == solver_type::SOR_RB) {
         _pressure_solver = std::make_unique<SOR_RB>(omg);
+        _solver_name = "SOR_RB";
     } else if (solver == solver_type::SOR_ICIAR) {
         _pressure_solver = std::make_unique<SOR_Iciar>(omg);
+        _solver_name = "SOR_ICIAR";
     }
     _max_iter = itermax;
     _tolerance = eps;
@@ -262,7 +265,9 @@ void Case::simulate() {
     else
         std::cout << "  dt      : FIXED = " << std::setprecision(6) << dt << "   (adaptive disabled — tau <= 0)\n";
 
-    std::cout << "  SOR     : omega=" << std::setprecision(2) << _omg << "   itermax=" << _max_iter
+    std::cout << "  Solver  : " << std::left << std::setw(10) << _solver_name
+              << "  omega=" << std::fixed << std::setprecision(2) << _omg
+              << "   itermax=" << _max_iter
               << "   eps=" << std::scientific << std::setprecision(2) << _tolerance << "\n"
               << "  Output  : " << _dict_name << "/\n"
               << "------------------------------------------------------------\n"
@@ -356,7 +361,8 @@ void Case::simulate() {
               << " t=" << std::fixed << std::setprecision(3) << t << " steps=" << timestep << " vtk=" << vtk_count
               << " avg_sor=" << std::fixed << std::setprecision(1) << avg_sor << " max_sor=" << max_sor_iter
               << " avg_res=" << std::scientific << std::setprecision(2) << avg_res << " avg_dt=" << std::scientific
-              << std::setprecision(2) << avg_dt << " status=" << (diverged ? "DIVERGED" : "OK") << "\n";
+              << std::setprecision(2) << avg_dt << " solver=" << _solver_name
+              << " status=" << (diverged ? "DIVERGED" : "OK") << "\n";
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
