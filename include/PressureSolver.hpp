@@ -58,16 +58,16 @@ class SOR : public PressureSolver {
 
 class SOR_Iciar : public PressureSolver {
   public:
-    SOR() = default;
+    SOR_Iciar() = default;
 
     /**
      * @brief Constructor of SOR solver
      *
      * @param[in] relaxation factor
      */
-    SOR(double omega);
+    SOR_Iciar(double omega);
 
-    virtual ~SOR() = default;
+    virtual ~SOR_Iciar() = default;
 
     /**
      * @brief Solve the pressure equation on given field, grid and boundary
