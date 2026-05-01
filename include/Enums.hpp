@@ -28,4 +28,5 @@ enum class cell_type {
 enum class solver_type {
     SOR,
     SOR_RB,
+    SOR_ICIAR,
 };

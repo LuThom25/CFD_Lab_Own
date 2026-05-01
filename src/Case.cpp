@@ -83,8 +83,11 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                         solver = solver_type::SOR;
                     else if (solver_str == "SOR_RB")
                         solver = solver_type::SOR_RB;
+                    else if (solver_str == "SOR_ICIAR")
+                        solver = solver_type::SOR_ICIAR;
                     else {
                         std::cerr << "Error: unknown solver type '" << solver_str << "'.\n";
+                        std::cerr << "  Valid options: SOR  SOR_RB  SOR_ICIAR\n";
                         std::exit(1);
                     }
                 }
@@ -153,6 +156,8 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
         _pressure_solver = std::make_unique<SOR>(omg);
     } else if (solver == solver_type::SOR_RB) {
         _pressure_solver = std::make_unique<SOR_RB>(omg);
+    } else if (solver == solver_type::SOR_ICIAR) {
+        _pressure_solver = std::make_unique<SOR_Iciar>(omg);
     }
     _max_iter = itermax;
     _tolerance = eps;
