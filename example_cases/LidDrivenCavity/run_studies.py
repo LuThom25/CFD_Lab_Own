@@ -143,7 +143,7 @@ def make_comparison_grid(img_rows, col_titles, row_labels, suptitle, out_path):
 SUMMARY_RE = re.compile(
     r"SUMMARY\s+t=([\d.]+)\s+steps=(\d+)\s+vtk=(\d+)\s+"
     r"avg_sor=([\d.]+)\s+max_sor=(\d+)\s+avg_res=([\d.eE+\-]+)\s+"
-    r"avg_dt=([\d.eE+\-]+)\s+status=(\w+)"
+    r"avg_dt=([\d.eE+\-]+)\s+(?:solver=\S+\s+)?status=(\w+)"
 )
 
 # ── Base configuration (worksheet defaults) ───────────────────────────────────
