@@ -1,5 +1,5 @@
 #--------------------------------------------
-#            size of the domain             
+#            size of the domain
 #--------------------------------------------
 xlength      1
 ylength      1
@@ -37,6 +37,16 @@ itermax      100
 eps          0.001
 omg          1.7
 gamma        0.5
+
+#--------------------------------------------
+#               solver
+# Select the pressure Poisson solver:
+#   SOR       - Successive Over-Relaxation (Thomas, with zero-mean projection)
+#   SOR_RB    - Red-Black SOR (checkerboard pattern, parallelisation-ready)
+#   SOR_ICIAR - SOR variant by Iciar
+# Default if omitted: SOR
+#--------------------------------------------
+solver       SOR
 
 #--------------------------------------------
 #     kinematic viscosity
