@@ -18,7 +18,7 @@ Tasks:
   8 — Viscosity study: nu = 0.01 → 0.0001 (Re = 100 → 10000), adaptive dt
 """
 
-import subprocess, re, time, shutil, sys, tempfile, math
+import subprocess, re, time, shutil, sys, tempfile, math, csv
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")          # headless – no GUI needed
@@ -410,6 +410,18 @@ def print_table(headers: list, rows: list) -> None:
         print(fmt.format(*[str(v) for v in row]))
     print(sep)
 
+CSV_DIR = PLOTS_DIR  # save CSVs next to the plots
+
+def save_csv(filename: str, headers: list, rows: list) -> None:
+    """Write headers + rows to a CSV file in CSV_DIR."""
+    CSV_DIR.mkdir(parents=True, exist_ok=True)
+    path = CSV_DIR / filename
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(headers)
+        w.writerows(rows)
+    print(f"  → CSV  saved: study_plots/{filename}")
+
 def section(title: str) -> None:
     print("\n" + "=" * 66)
     print(f"  {title}")
@@ -436,10 +448,9 @@ def task4():
         f"{r.get('avg_res', '-'):.3f}" if "avg_res" in r else "-",
         r["status"],
     ]]
-    print_table(
-        ["grid", "nu", "Re", "avg dt", "steps", "VTK files", "avg SOR iter", "avg residual", "status"],
-        rows,
-    )
+    hdrs4 = ["grid", "nu", "Re", "avg dt", "steps", "VTK files", "avg SOR iter", "avg residual", "status"]
+    print_table(hdrs4, rows)
+    save_csv(f"task4_base_{_ACTIVE_SOLVER}.csv", hdrs4, rows)
     print()
 
 
@@ -475,11 +486,10 @@ def task5():
         ])
         print(f"  omega={omg:.2f}  done  ({r['status']})", flush=True)
 
+    hdrs5a = ["omega", "avg SOR iter", "hits itermax", "avg residual", "wall time", "status"]
     print()
-    print_table(
-        ["omega", "avg SOR iter", "hits itermax", "avg residual", "wall time", "status"],
-        rows,
-    )
+    print_table(hdrs5a, rows)
+    save_csv(f"task5a_omega_{_ACTIVE_SOLVER}.csv", hdrs5a, rows)
 
     # Since eps is intentionally unreachable, 'best' means the omega that gives
     # the smallest average residual after the fixed iteration budget.
@@ -548,11 +558,10 @@ def task5():
         ])
         print(f"  itermax={im:>3}  done  ({r['status']})", flush=True)
 
+    hdrs5b = ["itermax", "avg SOR iter", "max SOR iter", "avg residual", "status"]
     print()
-    print_table(
-        ["itermax", "avg SOR iter", "max SOR iter", "avg residual", "status"],
-        rows2,
-    )
+    print_table(hdrs5b, rows2)
+    save_csv(f"task5b_itermax_{_ACTIVE_SOLVER}.csv", hdrs5b, rows2)
     print("\n  Influence of itermax (with optimal ω, t_end=50):")
 
     # ── Plot 5b: two side-by-side subplots ────────────────────────────────────
@@ -623,11 +632,10 @@ def task6():
         ])
         print(f"  dt={dt:.3f}  CFL≈{cfl:.2f}  visc={visc:.2f}  {r['status']}", flush=True)
 
+    hdrs6 = ["dt", "CFL=dt/dx", "CFL<1?", "dt/dt_visc", "visc<1?", "status", "time"]
     print()
-    print_table(
-        ["dt", "CFL=dt/dx", "CFL<1?", "dt/dt_visc", "visc<1?", "status", "time"],
-        rows,
-    )
+    print_table(hdrs6, rows)
+    save_csv(f"task6_dt_stability_{_ACTIVE_SOLVER}.csv", hdrs6, rows)
 
     # ── Plot 6 ─────────────────────────────────────────────────────────────────
     dt_vals  = [r[0] for r in rows]
@@ -710,11 +718,10 @@ def task7():
         ])
         print(f"  {n:>3}×{n:<3}  dx={dx:.5f}  CFL≈{cfl:.2f}  {r['status']}", flush=True)
 
+    hdrs7 = ["grid", "dx", "CFL≈dt/dx", "criterion", "status", "avg SOR", "wall time"]
     print()
-    print_table(
-        ["grid", "dx", "CFL≈dt/dx", "criterion", "status", "avg SOR", "wall time"],
-        rows,
-    )
+    print_table(hdrs7, rows)
+    save_csv(f"task7_grid_refinement_{_ACTIVE_SOLVER}.csv", hdrs7, rows)
     print()
 
     # ── 7b: Visualize stable grid cases ───────────────────────────────────────
@@ -834,11 +841,10 @@ def task8():
         ])
         print(f"  nu={nu}  Re={int(Re):>5}  {r['status']}", flush=True)
 
+    hdrs8 = ["nu", "Re", "avg dt", "avg SOR iter", "max SOR", "hits itermax", "status"]
     print()
-    print_table(
-        ["nu", "Re", "avg dt", "avg SOR iter", "max SOR", "hits itermax", "status"],
-        rows,
-    )
+    print_table(hdrs8, rows)
+    save_csv(f"task8_viscosity_{_ACTIVE_SOLVER}.csv", hdrs8, rows)
     print()
     # ── 8c: Visual output per Re (velocity + streamlines) ─────────────────────
     print("\n── 8c: Flow visualization per Re (velocity magnitude + streamlines) ──\n")
