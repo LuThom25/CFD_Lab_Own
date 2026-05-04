@@ -506,19 +506,17 @@ def task5():
     omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
     res_vals = [float(r[3]) for r in rows if r[3] != "-"]
     colors   = ["tab:green" if o == best_omg else "tab:blue" for o in omg_vals]
-    fig, ax  = plt.subplots(figsize=(7, 4.5))
+    fig, ax  = plt.subplots(figsize=(10, 6))
     bars = ax.bar([str(o) for o in omg_vals], res_vals,
                   color=colors, edgecolor="black", linewidth=0.6)
-    # Value labels above each bar — log-aware vertical offset avoids overlap
+    # Value labels above each bar — offset is 5 % of y-range to avoid overflow
+    y_top = max(res_vals) * 1.35
     for bar, v in zip(bars, res_vals):
-        ax.text(bar.get_x() + bar.get_width() / 2, v + 0.03,
+        ax.text(bar.get_x() + bar.get_width() / 2, v + y_top * 0.02,
                 f"{v:.3f}", ha="center", va="bottom", fontsize=8)
     ax.axhline(SOR_OMEGA_EPS, color="purple", linewidth=1.2, linestyle=":",
                label=f"ε = {SOR_OMEGA_EPS:.0e}  (unreachable target)")
-    if res_vals:
-        y_min = min(SOR_OMEGA_EPS * 0.1, min(res_vals) * 0.5)
-        y_max = max(res_vals) * 8
-    ax.set_ylim(0.010, 2.0)
+    ax.set_ylim(0.010, y_top)
     ax.set_xlabel("Relaxation factor ω")
     ax.set_ylabel("Avg SOR residual after fixed iteration budget ")
     ax.set_title(f"Task 5a — SOR Residual vs. Relaxation Factor ω\n"
@@ -528,9 +526,9 @@ def task5():
     purple_patch = mpatches.Patch(color="purple", label=f"ε = {SOR_OMEGA_EPS:.0e}")
     ax.legend(handles=[green_patch, purple_patch])
     fig.tight_layout()
-    fig.savefig(PLOTS_DIR / "task5a_omega_residual_unreachable_eps.png")
+    fig.savefig(PLOTS_DIR / "task5a_omega_residual_unreachable_eps.png", bbox_inches="tight")
     # Also overwrite the original filename expected by existing report material.
-    fig.savefig(PLOTS_DIR / "task5a_omega_residual.png")
+    fig.savefig(PLOTS_DIR / "task5a_omega_residual.png", bbox_inches="tight")
     plt.close(fig)
     print(f"\n  → Plot saved: study_plots/task5a_omega_residual_unreachable_eps.png")
     print(f"  → Compatibility copy saved: study_plots/task5a_omega_residual.png")
