@@ -190,6 +190,14 @@ BASE_CFG = dict(
     PI=0.0,      UI=0.0,      VI=0.0,
 )
 
+# ── Task-5a SOR omega study settings ─────────────────────────────────────────
+# For the omega sweep we deliberately request a residual near double-precision
+# roundoff. This is not a physically meaningful convergence target; it is used
+# to force the SOR loop to terminate by itermax so omega values can be compared
+# by residual decay after the same fixed iteration budget.
+SOR_OMEGA_EPS = 1.0e-15
+SOR_OMEGA_ITERMAX = 100
+
 # ── Utility: write a .dat file ────────────────────────────────────────────────
 def make_dat(cfg: dict, path: Path) -> None:
     with open(path, "w") as f:
@@ -414,7 +422,6 @@ def task4():
     print("VTK output every dt_value=0.5 s  →  100 snapshots\n")
 
     cfg = {**BASE_CFG, "t_end": 50.0, "dt_value": 0.5}
-    print("  Running ... (t_end=50.0, may take ~1–2 min)", flush=True)
     r   = run_case(cfg, "ldc_base", timeout=300)
     print(f"  done  ({r['status']})\n", flush=True)
 
@@ -434,12 +441,7 @@ def task4():
         rows,
     )
     print()
-    print("  The simulation runs until t=50 s to allow the flow to reach a")
-    print("  quasi-steady state. At Re=100 a single stable vortex fills the")
-    print("  cavity. Key observations:")
-    print("  • Adaptive dt settles at ~5e-3 s (viscous stability limit × tau).")
-    print("  • SOR converges well within itermax (Fredholm fix + zero-mean pressure).")
-    print("  • VTK snapshots are visualized via visualize.py / make_videos.sh.")
+
 
 # ── Task 5: SOR omega and itermax study ───────────────────────────────────────
 def task5():
@@ -447,21 +449,27 @@ def task5():
     print("Grid: 50×50  nu=0.01  Re≈100  t_end=50.0  (adaptive dt, tau=0.5)\n")
 
     # ── 5a: vary omega ──────────────────────────────────────────────────────
-    # Use itermax=500 so SOR can actually converge within the budget
-    # and the optimal omega becomes visible.  With itermax=100 all omega
-    # values hit the cap equally, masking any difference.
-    print("── 5a: Effect of relaxation factor omega (itermax=500) ──\n")
+    # Deliberately use an unrealistically small residual target so every run is
+    # iteration-budget-limited. We then compare omega values by the residual
+    # reached after the same number of SOR iterations, not by early convergence.
+    print(f"── 5a: Effect of relaxation factor omega "
+          f"(itermax={SOR_OMEGA_ITERMAX}, eps={SOR_OMEGA_EPS:.0e}) ──\n")
+
     omegas = [0.5, 1.0, 1.3, 1.5, 1.7, 1.8, 1.9, 1.95, 1.99]
     rows   = []
     for omg in omegas:
-        cfg = {**BASE_CFG, "omg": omg, "itermax": 500, "t_end": 50.0}
+        cfg = {**BASE_CFG,
+               "omg": omg,
+               "eps": SOR_OMEGA_EPS,
+               "itermax": SOR_OMEGA_ITERMAX,
+               "t_end": 2.0}
         r   = run_case(cfg, f"omega_{omg}", timeout=300)
-        hits = "YES" if r.get("max_sor", 0) >= 500 else "no"
+        hits = "YES" if r.get("max_sor", 0) >= SOR_OMEGA_ITERMAX else "no"
         rows.append([
             omg,
             f"{r.get('avg_sor', '-'):.0f}" if "avg_sor" in r else "-",
             hits,
-            f"{r.get('avg_res', '-'):.3f}" if "avg_res" in r else "-",
+            f"{r.get('avg_res', '-'):.3e}" if "avg_res" in r else "-",
             f"{r['wall_time']}s",
             r["status"],
         ])
@@ -473,32 +481,26 @@ def task5():
         rows,
     )
 
-    # ── Determine best omega (used for 5a plot AND passed to 5b) ──────────────
-    # Criterion: fewest avg iterations among those that never hit itermax.
-    # Tie-break: lowest avg residual.  Fallback: lowest residual across all.
-    converged_rows5a = [r for r in rows if r[2] == "no" and r[1] != "-"]
-    if converged_rows5a:
-        best_row5a = min(converged_rows5a,
-                         key=lambda r: (float(r[1]), float(r[3]) if r[3] != "-" else 999))
+    # Since eps is intentionally unreachable, 'best' means the omega that gives
+    # the smallest average residual after the fixed iteration budget.
+    valid_rows5a = [r for r in rows if r[3] != "-"]
+    if valid_rows5a:
+        best_row5a = min(valid_rows5a, key=lambda r: float(r[3]))
         best_omg = float(best_row5a[0])
         print(f"\n  → Best omega ≈ {best_omg}  "
-              f"(fastest: {float(best_row5a[1]):.0f} avg iter, converges without hitting itermax)")
+              f"(lowest avg residual after {SOR_OMEGA_ITERMAX} SOR iterations: "
+              f"{float(best_row5a[3]):.3e})")
     else:
-        valid = [(r[0], float(r[3])) for r in rows if r[3] != "-"]
-        best_omg = float(min(valid, key=lambda x: x[1])[0])
-        print(f"\n  → Best omega ≈ {best_omg}  (lowest avg residual, fallback criterion)")
+        best_omg = 1.7
+        print("\n  → No valid residuals parsed in 5a; using omega=1.7 for 5b.")
+
+    missed_cap = [r for r in rows if r[2] == "no"]
+    if missed_cap:
+        print("  WARNING: at least one run did not hit itermax. If the purpose is a")
+        print("  strictly fixed-budget comparison, decrease SOR_OMEGA_EPS further or")
+        print("  inspect whether the C++ solver is stopping for another reason.")
+
     print()
-    print("  Key insight: The pure Neumann pressure system has two convergence blockers:")
-    print("  (1) Fredholm incompatibility: sum(RS) ≠ 0 → no solution exists until RS is")
-    print("      mean-subtracted to enforce the compatibility condition sum(RS) = 0.")
-    print("  (2) Null-space drift: pressure is defined only up to a constant; each SOR")
-    print("      sweep accumulates a constant offset that prevents residual decay.")
-    print("  FIX applied (ws1_further_extensions_improved_SOR):")
-    print("  → subtract mean(RS) before iteration  (Fredholm compatibility)")
-    print("  → subtract mean(p) after each sweep   (zero-mean projection)")
-    print("  Result: avg SOR iterations drop from 100 → ~5 (quasi-steady), residual reaches eps.")
-    print("  omega<1: slow (under-relaxation).  omega≈1.7–1.9: fastest (fewest iter).")
-    print("  omega→2: instability — iter count rises again and may hit itermax.")
 
     # ── Plot 5a ────────────────────────────────────────────────────────────────
     omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
@@ -509,23 +511,29 @@ def task5():
                   color=colors, edgecolor="black", linewidth=0.6)
     # Value labels above each bar — log-aware vertical offset avoids overlap
     for bar, v in zip(bars, res_vals):
-        ax.text(bar.get_x() + bar.get_width() / 2, v * 1.9,
+        ax.text(bar.get_x() + bar.get_width() / 2, v + 0.03,
                 f"{v:.3f}", ha="center", va="bottom", fontsize=8)
-    ax.axhline(0.001, color="purple", linewidth=1.2, linestyle=":",
-               label="ε = 0.001  (convergence target)")
-    ax.set_yscale("log")
-    ax.set_ylim(4e-4, max(res_vals) * 6)   # headroom so labels never clip
+    ax.axhline(SOR_OMEGA_EPS, color="purple", linewidth=1.2, linestyle=":",
+               label=f"ε = {SOR_OMEGA_EPS:.0e}  (unreachable target)")
+    if res_vals:
+        y_min = min(SOR_OMEGA_EPS * 0.1, min(res_vals) * 0.5)
+        y_max = max(res_vals) * 8
+    ax.set_ylim(0.010, 2.0)
     ax.set_xlabel("Relaxation factor ω")
-    ax.set_ylabel("Avg SOR residual  [log scale]")
+    ax.set_ylabel("Avg SOR residual after fixed iteration budget ")
     ax.set_title(f"Task 5a — SOR Residual vs. Relaxation Factor ω\n"
-                 f"(itermax=500, 50×50 grid, Re=100, solver={_ACTIVE_SOLVER})")
-    green_patch = mpatches.Patch(color="tab:green", label=f"Best ω = {best_omg}")
-    ax.legend(handles=[green_patch,
-                       mpatches.Patch(color="purple", label="ε = 0.001")])
+                 f"(itermax={SOR_OMEGA_ITERMAX}, eps={SOR_OMEGA_EPS:.0e}, "
+                 f"50×50 grid, Re=100, solver={_ACTIVE_SOLVER})")
+    green_patch = mpatches.Patch(color="tab:green", label=f"Lowest residual: ω = {best_omg}")
+    purple_patch = mpatches.Patch(color="purple", label=f"ε = {SOR_OMEGA_EPS:.0e}")
+    ax.legend(handles=[green_patch, purple_patch])
     fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "task5a_omega_residual_unreachable_eps.png")
+    # Also overwrite the original filename expected by existing report material.
     fig.savefig(PLOTS_DIR / "task5a_omega_residual.png")
     plt.close(fig)
-    print(f"\n  → Plot saved: study_plots/task5a_omega_residual.png")
+    print(f"\n  → Plot saved: study_plots/task5a_omega_residual_unreachable_eps.png")
+    print(f"  → Compatibility copy saved: study_plots/task5a_omega_residual.png")
 
     # ── 5b: vary itermax ───────────────────────────────────────────────────
     print(f"\n── 5b: Effect of itermax (omega={best_omg} — optimal from 5a) ──\n")
@@ -549,23 +557,6 @@ def task5():
         rows2,
     )
     print("\n  Influence of itermax (with optimal ω, t_end=50):")
-    print("  • itermax=5  → DIVERGED: the transient phase (t≈0–15 s) demands up to")
-    print("    ~20 SOR iterations per step. With only 5 allowed, pressure correction")
-    print("    is so inaccurate that velocity errors accumulate and the solver blows up.")
-    print("  • itermax=10–20 → stable but avg residual >> ε: pressure correction is")
-    print("    partial; simulation runs but with reduced accuracy.")
-    print("  • itermax≥100 → residual approaches ε; itermax=500 converges fully (0.0009).")
-    print("  • avg SOR iterations barely change (7–9): most steps are cheap (quasi-steady);")
-    print("    only the transient phase drives up max_sor. Increasing itermax costs little")
-    print("    on average but is critical for stability in the transient phase.")
-    print()
-    print("  Why avg_res > ε is NOT a problem in practice (Task 4 base case):")
-    print("  The average spans ALL ~10 000 time steps, including ~2 000 transient steps")
-    print("  (t ≈ 0–10 s) where SOR needs 10–50 iter and may not reach ε before itermax.")
-    print("  In the quasi-steady phase (t > 10 s, ~8 000 steps) only 2–5 iterations")
-    print("  are needed and ε IS reached every single step.")
-    print("  The quasi-steady tail dominates avg_sor (→ ~8) while the transient outliers")
-    print("  keep avg_res slightly above ε. This is physically expected — no cause for concern.")
 
     # ── Plot 5b: two side-by-side subplots ────────────────────────────────────
     im_vals   = [r[0] for r in rows2]
@@ -640,10 +631,6 @@ def task6():
         ["dt", "CFL=dt/dx", "CFL<1?", "dt/dt_visc", "visc<1?", "status", "time"],
         rows,
     )
-    print(f"\n  Stability requires BOTH: CFL < 1 (dt < {dx:.4f}) AND dt < dt_visc = {dt_visc:.4f}")
-    print(f"  → Here dt_visc = dx²/(4·nu) = {dt_visc:.4f} is the BINDING constraint (< CFL limit).")
-    print(f"  → Adaptive stepping (tau=0.5) automatically uses dt = 0.5·{dt_visc:.4f} = {0.5*dt_visc:.4f}.")
-    print("  → For fixed dt, the safe region is dt < dt_visc ≈ 0.010.")
 
     # ── Plot 6 ─────────────────────────────────────────────────────────────────
     dt_vals  = [r[0] for r in rows]
@@ -732,21 +719,6 @@ def task7():
         rows,
     )
     print()
-    print("  Convergence observations (fixed dt=0.05, nu=0.001):")
-    print("  • CFL = dt/dx grows as grid is refined (dx shrinks): 0.80 → 1.60 → 3.20 → …")
-    print("    The stability criterion CFL < 1 is violated for all grids finer than 16×16.")
-    print("  • SOR iterations increase sharply with grid refinement:")
-    print("    16×16: 15.7 avg  →  32×32: 35.7 avg  →  64×64+: hits itermax=100 every step.")
-    print("    Finer grids have more unknowns and a larger, stiffer Poisson system —")
-    print("    SOR needs more iterations to reach the same residual tolerance.")
-    print("  • 32×32 (CFL≈1.60) survives for t_end=5 s because interior velocities stay")
-    print("    well below U_wall — instability growth (~1.6×/step) is too slow over 100 steps.")
-    print("    This is MARGINAL; at t_end=50 s the 32×32 case would likely diverge.")
-    print("  • 64×64 (CFL≈3.20) diverges immediately: growth rate is large enough to")
-    print("    destabilise even at t=0 near the moving-lid ghost cells.")
-    print("  • CONCLUSION: with fixed dt=0.05, only 16×16 is truly stable.")
-    print("    Finer grids REQUIRE smaller dt → use adaptive time stepping!")
-    print("  • With adaptive dt (tau=0.5), ALL grid sizes converge correctly.")
 
     # ── 7b: Visualize stable grid cases ───────────────────────────────────────
     print("\n── 7b: Flow visualization for stable grids ──\n")
@@ -871,24 +843,6 @@ def task8():
         rows,
     )
     print()
-    print("  Observations (adaptive dt, t_end=50):")
-    print("  • Flow structure changes with Re:")
-    print("    Re=100:   single large primary vortex fills the cavity (well-known benchmark).")
-    print("    Re=500:   primary vortex stronger; small secondary vortices appear in corners.")
-    print("    Re=2000:  secondary corner vortices grow significantly; flow less symmetric.")
-    print("    Re=10000: highly complex, multiple vortices; likely unsteady / not converged")
-    print("              on 50×50 — finer grids and longer t_end needed for accuracy.")
-    print("  • As nu ↓ (Re ↑), the viscous stability limit dt_visc = dx²/(4·nu) → ∞,")
-    print("    so the CFL condition dt < dx/u_max becomes the binding constraint.")
-    print("    avg_dt INCREASES with Re (5e-3 → ~2e-2): at high Re the flow is")
-    print("    convection-limited and the lid velocity (~1 m/s) still allows dt~0.01.")
-    print("  • SOR convergence: max_sor hits itermax=100 in all cases during the")
-    print("    transient phase (first ~2000 steps). avg_sor stays low (5–9) because the")
-    print("    quasi-steady tail (~8000 steps) dominates. For high-Re accuracy increase")
-    print("    itermax to ≥200 to handle the longer transient properly.")
-    print("  • Without the Fredholm + zero-mean fix: avg iter=100 (cap every step),")
-    print("    avg residual≈1.23 — the solver never converges regardless of Re.")
-
     # ── 8c: Visual output per Re (velocity + streamlines) ─────────────────────
     print("\n── 8c: Flow visualization per Re (velocity magnitude + streamlines) ──\n")
     VIS_DIR = SCRIPT_DIR / "LidDrivenCavity_Output" / "task8_visuals"
