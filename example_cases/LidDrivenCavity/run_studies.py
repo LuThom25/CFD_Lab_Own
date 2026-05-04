@@ -502,36 +502,37 @@ def task5():
 
     print()
 
-    # ── Plot 5a ────────────────────────────────────────────────────────────────
-    omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
-    res_vals = [float(r[3]) for r in rows if r[3] != "-"]
-    colors   = ["tab:green" if o == best_omg else "tab:blue" for o in omg_vals]
-    fig, ax  = plt.subplots(figsize=(10, 6))
-    bars = ax.bar([str(o) for o in omg_vals], res_vals,
-                  color=colors, edgecolor="black", linewidth=0.6)
-    # Value labels above each bar — offset is 5 % of y-range to avoid overflow
-    y_top = max(res_vals) * 1.35
-    for bar, v in zip(bars, res_vals):
-        ax.text(bar.get_x() + bar.get_width() / 2, v + y_top * 0.02,
-                f"{v:.3f}", ha="center", va="bottom", fontsize=8)
-    ax.axhline(SOR_OMEGA_EPS, color="purple", linewidth=1.2, linestyle=":",
-               label=f"ε = {SOR_OMEGA_EPS:.0e}  (unreachable target)")
-    ax.set_ylim(0.010, y_top)
-    ax.set_xlabel("Relaxation factor ω")
-    ax.set_ylabel("Avg SOR residual after fixed iteration budget ")
-    ax.set_title(f"Task 5a — SOR Residual vs. Relaxation Factor ω\n"
-                 f"(itermax={SOR_OMEGA_ITERMAX}, eps={SOR_OMEGA_EPS:.0e}, "
-                 f"50×50 grid, Re=100, solver={_ACTIVE_SOLVER})")
-    green_patch = mpatches.Patch(color="tab:green", label=f"Lowest residual: ω = {best_omg}")
-    purple_patch = mpatches.Patch(color="purple", label=f"ε = {SOR_OMEGA_EPS:.0e}")
-    ax.legend(handles=[green_patch, purple_patch])
-    fig.tight_layout()
-    fig.savefig(PLOTS_DIR / "task5a_omega_residual_unreachable_eps.png", bbox_inches="tight")
-    # Also overwrite the original filename expected by existing report material.
-    fig.savefig(PLOTS_DIR / "task5a_omega_residual.png", bbox_inches="tight")
-    plt.close(fig)
-    print(f"\n  → Plot saved: study_plots/task5a_omega_residual_unreachable_eps.png")
-    print(f"  → Compatibility copy saved: study_plots/task5a_omega_residual.png")
+    # ── Plot 5a helper ─────────────────────────────────────────────────────────
+    def _plot_5a(eps_ref, out_path):
+        omg_vals = [float(r[0]) for r in rows if r[3] != "-"]
+        res_vals = [float(r[3]) for r in rows if r[3] != "-"]
+        colors   = ["tab:green" if o == best_omg else "tab:blue" for o in omg_vals]
+        fig, ax  = plt.subplots(figsize=(10, 6))
+        bars = ax.bar([str(o) for o in omg_vals], res_vals,
+                      color=colors, edgecolor="black", linewidth=0.6)
+        y_top = max(res_vals) * 1.35
+        for bar, v in zip(bars, res_vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, v + y_top * 0.02,
+                    f"{v:.3f}", ha="center", va="bottom", fontsize=8)
+        ax.axhline(eps_ref, color="purple", linewidth=1.2, linestyle=":",
+                   label=f"ε = {eps_ref:.0e}  (unreachable target)")
+        ax.set_ylim(0.010, y_top)
+        ax.set_xlabel("Relaxation factor ω")
+        ax.set_ylabel("Avg SOR residual after fixed iteration budget")
+        ax.set_title(f"Task 5a — SOR Residual vs. Relaxation Factor ω\n"
+                     f"(itermax={SOR_OMEGA_ITERMAX}, eps={eps_ref:.0e}, "
+                     f"50×50 grid, Re=100, solver={_ACTIVE_SOLVER})")
+        green_patch = mpatches.Patch(color="tab:green", label=f"Lowest residual: ω = {best_omg}")
+        purple_patch = mpatches.Patch(color="purple", label=f"ε = {eps_ref:.0e}")
+        ax.legend(handles=[green_patch, purple_patch])
+        fig.tight_layout()
+        fig.savefig(out_path, bbox_inches="tight")
+        plt.close(fig)
+
+    _plot_5a(1e-15, PLOTS_DIR / "task5a_omega_residual_unreachable_eps.png")
+    _plot_5a(1e-7,  PLOTS_DIR / "task5a_omega_residual.png")
+    print(f"\n  → Plot saved: study_plots/task5a_omega_residual_unreachable_eps.png  (ε=1e-15)")
+    print(f"  → Plot saved: study_plots/task5a_omega_residual.png  (ε=1e-7)")
 
     # ── 5b: vary itermax ───────────────────────────────────────────────────
     print(f"\n── 5b: Effect of itermax (omega={best_omg} — optimal from 5a) ──\n")
