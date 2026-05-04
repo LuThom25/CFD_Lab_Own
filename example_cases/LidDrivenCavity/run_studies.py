@@ -530,9 +530,7 @@ def task5():
         plt.close(fig)
 
     _plot_5a(1e-15, PLOTS_DIR / "task5a_omega_residual_unreachable_eps.png")
-    _plot_5a(1e-7,  PLOTS_DIR / "task5a_omega_residual.png")
     print(f"\n  → Plot saved: study_plots/task5a_omega_residual_unreachable_eps.png  (ε=1e-15)")
-    print(f"  → Plot saved: study_plots/task5a_omega_residual.png  (ε=1e-7)")
 
     # ── 5b: vary itermax ───────────────────────────────────────────────────
     print(f"\n── 5b: Effect of itermax (omega={best_omg} — optimal from 5a) ──\n")
