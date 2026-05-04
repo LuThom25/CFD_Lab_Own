@@ -152,16 +152,16 @@ SUMMARY_RE = re.compile(
 # whichever solver is set in the config file.
 #
 # Available solvers (set in LidDrivenCavity.dat):
-#   solver  SOR        - Standard Successive Over-Relaxation  (with zero-mean projection)
-#   solver  SOR_RB     - Red-Black SOR  (checkerboard, parallelisation-ready)
-#   solver  SOR_ICIAR  - SOR variant by Iciar
-#   (omit line)        - defaults to SOR
+#   solver  SOR_MEAN_CORRECTION - Thomas: SOR + Fredholm fix + zero-mean projection
+#   solver  SOR_RB              - Red-Black SOR  (checkerboard, parallelisation-ready)
+#   solver  SOR_STANDARD        - Iciar: plain SOR (no mean correction)
+#   (omit line)                 - defaults to SOR_MEAN_CORRECTION
 _DAT_FILE = SCRIPT_DIR / "LidDrivenCavity.dat"
 
 def _read_solver_from_dat(dat_path: Path) -> str:
-    """Parse the 'solver' field from a .dat file.  Returns 'SOR' if not found."""
+    """Parse the 'solver' field from a .dat file.  Returns 'SOR_MEAN_CORRECTION' if not found."""
     if not dat_path.exists():
-        return "SOR"
+        return "SOR_MEAN_CORRECTION"
     for line in dat_path.read_text().splitlines():
         stripped = line.strip()
         # Skip blank lines and comments
@@ -170,7 +170,7 @@ def _read_solver_from_dat(dat_path: Path) -> str:
         parts = stripped.split()
         if len(parts) >= 2 and parts[0].lower() == "solver":
             return parts[1].upper()   # e.g. "SOR_RB"
-    return "SOR"
+    return "SOR_MEAN_CORRECTION"
 
 _ACTIVE_SOLVER = _read_solver_from_dat(_DAT_FILE)
 print(f"[run_studies] Solver read from LidDrivenCavity.dat: {_ACTIVE_SOLVER}")

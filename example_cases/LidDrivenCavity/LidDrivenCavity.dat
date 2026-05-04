@@ -41,12 +41,12 @@ gamma        0.5
 #--------------------------------------------
 #               solver
 # Select the pressure Poisson solver:
-#   SOR       - Successive Over-Relaxation (Thomas, with zero-mean projection)
+#   SOR_MEAN_CORRECTION - Successive Over-Relaxation (Thomas, with zero-mean projection)
 #   SOR_RB    - Red-Black SOR (checkerboard pattern, parallelisation-ready)
-#   SOR_ICIAR - SOR variant by Iciar
-# Default if omitted: SOR_RB
+#   SOR_STANDARD - Standard SOR by Iciar (no mean correction)
+# Default if omitted: SOR_MEAN_CORRECTION
 #--------------------------------------------
-solver       SOR_ICIAR
+solver       SOR_STANDARD
 
 #--------------------------------------------
 #     kinematic viscosity
