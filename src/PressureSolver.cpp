@@ -4,9 +4,9 @@
 #include "PressureSolver.hpp"
 
 // THOMAS IMPLEMENTATION OF 'PressureSolver.cpp'
-SOR::SOR(double omega) : _omega(omega) {}
+SOR_Mean_Correction::SOR_Mean_Correction(double omega) : _omega(omega) {}
 
-double SOR::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
+double SOR_Mean_Correction::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
 
     double dx    = grid.dx();
     double dy    = grid.dy();
@@ -48,9 +48,9 @@ double SOR::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<B
 }
 
 // ICIAR'S IMPLEMENTATION OF 'PressureSolver.cpp'
-SOR_Iciar::SOR_Iciar(double omega) : _omega(omega) {}
+SOR_Standard::SOR_Standard(double omega) : _omega(omega) {}
 
-double SOR_Iciar::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries) {
+double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
 
     double dx = grid.dx();
     double dy = grid.dy();

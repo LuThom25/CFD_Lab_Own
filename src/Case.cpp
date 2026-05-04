@@ -41,7 +41,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     double tau{};                         /* safety factor for time step*/
     int itermax{};                        /* max. number of iterations for pressure per time step */
     double eps{};                         /* accuracy bound for pressure*/
-    solver_type solver{solver_type::SOR}; /* type of solver */
+    solver_type solver{solver_type::SOR_MEAN_CORRECTION}; /* type of solver */
 
     // R1: fail fast if the input file cannot be opened.
     if (!file.is_open()) {
@@ -79,15 +79,15 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 if (var == "solver") {
                     std::string solver_str;
                     file >> solver_str;
-                    if (solver_str == "SOR")
-                        solver = solver_type::SOR;
+                    if (solver_str == "SOR_MEAN_CORRECTION")
+                        solver = solver_type::SOR_MEAN_CORRECTION;
                     else if (solver_str == "SOR_RB")
                         solver = solver_type::SOR_RB;
-                    else if (solver_str == "SOR_ICIAR")
-                        solver = solver_type::SOR_ICIAR;
+                    else if (solver_str == "SOR_STANDARD")
+                        solver = solver_type::SOR_STANDARD;
                     else {
                         std::cerr << "Error: unknown solver type '" << solver_str << "'.\n";
-                        std::cerr << "  Valid options: SOR  SOR_RB  SOR_ICIAR\n";
+                        std::cerr << "  Valid options: SOR_MEAN_CORRECTION  SOR_RB  SOR_STANDARD\n";
                         std::exit(1);
                     }
                 }
@@ -152,15 +152,15 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
-    if (solver == solver_type::SOR) {
-        _pressure_solver = std::make_unique<SOR>(omg);
-        _solver_name = "SOR";
+    if (solver == solver_type::SOR_MEAN_CORRECTION) {
+        _pressure_solver = std::make_unique<SOR_Mean_Correction>(omg);
+        _solver_name = "SOR_MEAN_CORRECTION";
     } else if (solver == solver_type::SOR_RB) {
         _pressure_solver = std::make_unique<SOR_RB>(omg);
         _solver_name = "SOR_RB";
-    } else if (solver == solver_type::SOR_ICIAR) {
-        _pressure_solver = std::make_unique<SOR_Iciar>(omg);
-        _solver_name = "SOR_ICIAR";
+    } else if (solver == solver_type::SOR_STANDARD) {
+        _pressure_solver = std::make_unique<SOR_Standard>(omg);
+        _solver_name = "SOR_STANDARD";
     }
     _max_iter = itermax;
     _tolerance = eps;

@@ -26,22 +26,24 @@ class PressureSolver {
 };
 
 /**
- * @brief Successive Over-Relaxation algorithm for solution of pressure Poisson
- * equation
+ * @brief SOR with Fredholm compatibility fix and zero-mean pressure projection.
  *
+ * Thomas's implementation. Subtracts mean(RS) after each RHS assembly and
+ * mean(p) after every sweep so the iterate stays in the subspace orthogonal
+ * to the null space of the all-Neumann Poisson system, enabling convergence.
  */
-class SOR : public PressureSolver {
+class SOR_Mean_Correction : public PressureSolver {
   public:
-    SOR() = default;
+    SOR_Mean_Correction() = default;
 
     /**
-     * @brief Constructor of SOR solver
+     * @brief Constructor of SOR_Mean_Correction solver
      *
-     * @param[in] relaxation factor
+     * @param[in] omega  SOR relaxation factor
      */
-    SOR(double omega);
+    SOR_Mean_Correction(double omega);
 
-    virtual ~SOR() = default;
+    virtual ~SOR_Mean_Correction() = default;
 
     /**
      * @brief Solve the pressure equation on given field, grid and boundary
@@ -56,18 +58,24 @@ class SOR : public PressureSolver {
     double _omega;
 };
 
-class SOR_Iciar : public PressureSolver {
+/**
+ * @brief Standard SOR without null-space correction.
+ *
+ * Iciar's implementation. Plain SOR sweep followed by L2-norm residual
+ * computation. No mean subtraction applied.
+ */
+class SOR_Standard : public PressureSolver {
   public:
-    SOR_Iciar() = default;
+    SOR_Standard() = default;
 
     /**
-     * @brief Constructor of SOR solver
+     * @brief Constructor of SOR_Standard solver
      *
-     * @param[in] relaxation factor
+     * @param[in] omega  SOR relaxation factor
      */
-    SOR_Iciar(double omega);
+    SOR_Standard(double omega);
 
-    virtual ~SOR_Iciar() = default;
+    virtual ~SOR_Standard() = default;
 
     /**
      * @brief Solve the pressure equation on given field, grid and boundary

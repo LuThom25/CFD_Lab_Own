@@ -26,7 +26,7 @@ enum class cell_type {
 };
 
 enum class solver_type {
-    SOR,
+    SOR_MEAN_CORRECTION,
     SOR_RB,
-    SOR_ICIAR,
+    SOR_STANDARD,
 };
