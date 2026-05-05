@@ -88,7 +88,7 @@ Set it in `LidDrivenCavity.dat`:
 ```
 solver = SOR_STANDARD
 ```
-Being SOR_STANDARD the solver chosen for all our simulations. 
+We chose SOR_STANDARD as the solver for all our simulations. 
 
 The remaining solver parameters are also set in the `.dat` file:
 
