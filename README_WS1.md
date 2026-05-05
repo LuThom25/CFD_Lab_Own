@@ -30,6 +30,7 @@ cfd-lab-group-c/
 │   ├── Fields.hpp
 │   ├── Grid.hpp
 │   └── PressureSolver.hpp
+│   └── Util.hpp              # added for the future    
 ├── example_cases/
 │   └── LidDrivenCavity/
 │       ├── LidDrivenCavity.dat     # Simulation parameters
