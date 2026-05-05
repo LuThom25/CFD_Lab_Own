@@ -1,124 +1,218 @@
-# Worksheet 1 — Lid-Driven Cavity
+# CFD Lab Worksheet 1: Lid-Driven Cavity
 
-## Requirements
+In this worksheet the 2D incompressible Navier-Stokes equations in the lid-driven were solved. In our setup, the top wall moves at $(u,v)=(1,0)$ velocity, and the remaining three walls are no-slip. Fields (u, v, p) are stored on a staggered Cartesian grid and advanced in time with explicit Euler + SOR pressure solve.
 
-- CMake + GCC (available in WSL/Linux)
-- ParaView 6.0.1 (with `pvpython`) — Windows or Linux
-- Python 3 with `matplotlib` and `pillow`
-- `ffmpeg` for video generation
+---
 
-Install Python dependencies (WSL):
-```bash
-sudo apt install python3-matplotlib python3-pil ffmpeg
-# OR inside a venv:
-pip install matplotlib pillow
+## Repository layout
+
+```
+cfd-lab-group-c/
+├── src/
+│   ├── main.cpp
+│   ├── Case.cpp              # Main simulation loop
+│   ├── Boundary.cpp          # Wall boundary conditions
+│   ├── Discretization.cpp    # FD stencils (convection, diffusion, interpolation)
+│   ├── Fields.cpp            # Fluxes, RHS, velocity update, adaptive dt
+│   ├── Grid.cpp              # Grid construction and cell access
+│   ├── Cell.cpp              # Cell type logic
+│   ├── Communication.cpp     # MPI stubs (unused in WS1)
+│   └── PressureSolver.cpp    # SOR variants
+├── include/
+│   ├── Boundary.hpp
+│   ├── Case.hpp
+│   ├── Cell.hpp
+│   ├── Communication.hpp
+│   ├── Datastructures.hpp
+│   ├── Discretization.hpp
+│   ├── Domain.hpp
+│   ├── Enums.hpp             # solver_type, cell_type, border_position enums
+│   ├── Fields.hpp
+│   ├── Grid.hpp
+│   └── PressureSolver.hpp
+├── example_cases/
+│   └── LidDrivenCavity/
+│       ├── LidDrivenCavity.dat     # Simulation parameters
+│       ├── visualize.py            # ParaView automation (Task 4)
+│       ├── run_studies.py          # Parameter sweep runner (Tasks 5–8)
+│       ├── make_videos.sh          # ffmpeg video assembly
+│       └── LidDrivenCavity_Output/ # All output (git-ignored)
+├── docs/
+│   └── first-steps.md
+├── build/                          # CMake build directory (git-ignored)
+└── CMakeLists.txt
 ```
 
 ---
 
-## 1. Compile
+## Implementation
+
+The main implementation of the SOR alsorithm is in `Case::simulate()`, which calls functions from `Fields`, `Discretization`, and `Boundary`. To get the full SOR algorithm working, we needed to complete:
+
+### `src/Case.cpp`
+- `Case::simulate()`: the main time-stepping loop: selects adaptive `dt`, applies boundary conditions, computes F/G and the pressure RHS, runs SOR iterations until convergence, updates velocities, and writes VTK output
+
+### `src/Fields.cpp`
+- `calculate_fluxes()`: computes the intermediate velocity fluxes F and G
+- `calculate_rs()`: copmutes the right-hand side of the pressure Poisson equation
+- `calculate_velocities()`: updates u and v after the pressure solve
+- `calculate_dt()`: computes next iteration's adaptive time step from the CFL and diffusion stability conditions
+
+### `src/Discretization.cpp`
+- `convection_u()`, `convection_v()`: donor-cell convective terms
+- `laplacian()`: second-order diffusion stencil
+- `interpolate()`: interpolates staggered values to the required locations
+
+### `src/Boundary.cpp`
+Both `FixedWallBoundary` and `MovingWallBoundary` implement:
+- `applyVelocity()`: sets ghost-cell values to enforce no-slip (fixed walls) or `(u,v) = (1,0)` (moving lid)
+- `applyPressure()`: zero-gradient Neumann condition via ghost-cell copy
+- `applyFlux()`: sets F/G on boundary cells
+
+
+
+---
+
+## Pressure solver
+
+Three SOR variants are available and selected directly in the `.dat` file — no recompilation needed:
+
+| Solver | `.dat` value | Description |
+|--------|-------------|-------------|
+| Standard SOR | `SOR_STANDARD` | Classic row-by-row SOR sweep |
+| Red-Black SOR | `SOR_RB` | Checkerboard ordering, better parallelism |
+| SOR with mean correction | `SOR_MEAN_CORRECTION` | Adds a mean pressure correction each iteration |
+
+Set it in `LidDrivenCavity.dat`:
+```
+solver = SOR_STANDARD
+```
+Being SOR_STANDARD the solver chosen for all our simulations. 
+
+The remaining solver parameters are also set in the `.dat` file:
+
+| Parameter | `.dat` keyword | Effect |
+|-----------|---------------|--------|
+| Relaxation factor | `omg` | ω ∈ (0, 2); 1.7 is a good default |
+| Max iterations | `itermax` | SOR stops here even if not converged |
+| Residual tolerance | `eps` | SOR stops early when residual < eps |
+
+---
+
+## Visualization and analysis
+
+To automate the ParaView visualization and analysis tasks (sweeping over the relaxation parameter, maximum number of iterations, etc.), we created two Python files which both live in `example_cases/LidDrivenCavity/`.
+
+### `visualize.py` — Task 4 (ParaView)
+Invoked via `pvpython`, it loads the VTK output and saves:
+- Scalar field plots: `final_u.png`, `final_v.png`, `final_pressure.png`, `final_velocity.png`
+- Glyph (arrow) plot: `final_glyphs.png`
+- Streamline plot: `final_streamlines.png`
+- Animation frames in `frames/` (assembled into videos by `make_videos.sh`)
 
 ```bash
-cd ~/CFD_Lab/cfd-lab-group-c/build
+"/mnt/c/Program Files/ParaView 6.0.1/bin/pvpython.exe" visualize.py
+# or on native Linux:
+pvpython visualize.py
+```
+
+### `run_studies.py` — Tasks 5–8 (parameter sweeps)
+Reruns the simulation with varying parameters and saves comparison plots to `LidDrivenCavity_Output/study_plots/`.
+
+| Task | What is swept | Key parameter |
+|------|--------------|--------------|
+| 5 | SOR relaxation factor ω | `omg` ∈ (0, 2), effect on convergence speed and iteration count |
+| 6 | Fixed time step `dt` | Adaptive stepping disabled; stability boundary identified |
+| 7 | Grid resolution | `imax = jmax` ∈ {16, 32, 64, 128, 256} with fixed `dt` |
+| 8 | Kinematic viscosity | `nu` ∈ {0.01, 0.002, 0.0005, 0.0001} → Re ∈ {100, 500, 2000, 10000} |
+
+Run all tasks at once or individually:
+```bash
+python3 run_studies.py 5 6 7 8   # all
+python3 run_studies.py 5         # ω sweep only
+python3 run_studies.py 6         # fixed dt stability only
+python3 run_studies.py 7         # grid refinement only
+python3 run_studies.py 8         # viscosity / Re study only
+```
+
+> Task 5 runs 9 full simulations (one per ω value) — allow ~30 min.
+
+---
+
+## Dependencies
+
+| Tool | Purpose |
+|------|---------|
+| CMake ≥ 3.12 + GCC | Build system |
+| ParaView 6.0.1 (`pvpython`) | Visualization |
+| Python 3 + `matplotlib` + `pillow` | Study plots |
+| `ffmpeg` | Video assembly |
+
+Install Python and ffmpeg in WSL:
+```bash
+sudo apt install python3-matplotlib python3-pil ffmpeg
+```
+
+---
+
+## Compile
+
+```bash
+cd ~/CFD_Lab/cfd-lab-group-c
+mkdir -p build && cd build
 cmake ..
 make -j$(nproc)
 ```
 
-This produces the binary at `build/fluidchen`.
-
-> Recompile with `make -j$(nproc)` every time you change C++ source files.
+The binary is at `build/fluidchen`. Re-run `make -j$(nproc)` after any source change.
 
 ---
 
-## 2. Run everything
+## Run
 
-From anywhere in the terminal:
+### Everything at once (Tasks 4–8)
 
 ```bash
-cd ~/CFD_Lab/cfd-lab-group-c/example_cases/LidDrivenCavity && \
-../../build/fluidchen LidDrivenCavity.dat && \
-"/mnt/c/Program Files/ParaView 6.0.1/bin/pvpython.exe" visualize.py && \
-bash make_videos.sh && \
-python3 run_studies.py 5 6 7 8
+cd ~/CFD_Lab/cfd-lab-group-c/example_cases/LidDrivenCavity \
+  && ../../build/fluidchen LidDrivenCavity.dat \
+  && "/mnt/c/Program Files/ParaView 6.0.1/bin/pvpython.exe" visualize.py \
+  && bash make_videos.sh \
+  && python3 run_studies.py 5 6 7 8
 ```
 
-### What each step does
+> On native Linux replace the `pvpython.exe` path with just `pvpython`.
+> If ParaView is elsewhere: `find /mnt/c -maxdepth 4 -iname "pvpython.exe"`.
 
-| Command | What it does |
-|---|---|
-| `fluidchen LidDrivenCavity.dat` | Runs the CFD simulation, writes VTK files to `LidDrivenCavity_Output/` |
-| `pvpython visualize.py` | Generates static images and animation frames from the VTK output |
-| `bash make_videos.sh` | Assembles frames into `.mp4` videos using ffmpeg |
-| `python3 run_studies.py 5 6 7 8` | Runs parameter studies for Tasks 5–8 and saves plots |
+### Step by step
 
-### To run only specific tasks
+| Step | Command | What it does |
+|------|---------|-------------|
+| Simulate | `../../build/fluidchen LidDrivenCavity.dat` | Writes VTK files to `LidDrivenCavity_Output/` |
+| Visualize | `pvpython visualize.py` | Renders PNGs + animation frames (Task 4) |
+| Videos | `bash make_videos.sh` | Assembles frames into `.mp4` |
+| Studies | `python3 run_studies.py <tasks>` | Runs parameter sweeps and saves plots |
 
-```bash
-python3 run_studies.py 4        # Task 4 only
-python3 run_studies.py 5 6      # Tasks 5 and 6
-python3 run_studies.py 5 6 7 8  # Tasks 5 to 8
-```
-
----
-
-## 3. ParaView path
-
-The `pvpython` path is hardcoded in the run command above. If your ParaView is installed elsewhere, find it with:
+### Running specific tasks only
 
 ```bash
-find /mnt/c -maxdepth 4 -iname "pvpython.exe" 2>/dev/null
-```
-
-Then replace `/mnt/c/Program Files/ParaView 6.0.1/bin/pvpython.exe` in the command accordingly.
-
-On native Linux, `pvpython` is usually just:
-```bash
-pvpython visualize.py
+python3 run_studies.py 5        # ω sweep (SOR convergence)
+python3 run_studies.py 6        # fixed dt stability study
+python3 run_studies.py 7        # grid refinement study
+python3 run_studies.py 8        # varying viscosity / Reynolds number
+python3 run_studies.py 5 6 7 8  # all of the above
 ```
 
 ---
 
-## 4. Output
+## Output
 
-All results are saved to:
+All results are written to `example_cases/LidDrivenCavity/LidDrivenCavity_Output/`:
+
 ```
-example_cases/LidDrivenCavity/LidDrivenCavity_Output/
+LidDrivenCavity_Output/
 ├── task4/
-│   ├── final_u.png
-│   ├── final_v.png
-│   ├── final_pressure.png
-│   ├── final_velocity.png
-│   ├── final_glyphs.png
-│   ├── final_streamlines.png
-│   ├── frames/         # animation frames
-│   └── videos/         # .mp4 files
-└── study_plots/        # plots for tasks 5–8
+│   ├── final_{u,v,pressure,velocity,glyphs,streamlines}.png
+│   ├── frames/       # PNG frames for animation
+│   └── videos/       # .mp4 files
+└── study_plots/      # Plots for Tasks 5–8
 ```
-
----
-
-## 5. Simulation parameters (Task 4)
-
-Defined in `LidDrivenCavity.dat`:
-
-| Parameter | Value |
-|---|---|
-| imax, jmax | 50 × 50 |
-| xlength, ylength | 1.0 |
-| dt | 0.05 (adaptive, tau=0.5) |
-| t_end | 50.0 |
-| dt_value | 0.5 |
-| eps | 0.001 |
-| omg | 1.7 |
-| gamma | 0.5 |
-| itermax | 100 |
-| nu | 0.01 (Re ≈ 100) |
-
----
-
-## 6. Notes
-
-- Task 5 runs 9 full simulations (one per omega value) — expect ~30 min total.
-- Tasks 6–8 are faster since they use shorter `t_end` or fewer grid points.
-- If `make_videos.sh` fails, check that `ffmpeg` is installed (`sudo apt install ffmpeg`).
-- If `matplotlib` is missing: `pip install matplotlib pillow` inside your venv, or `sudo apt install python3-matplotlib python3-pil` system-wide.
