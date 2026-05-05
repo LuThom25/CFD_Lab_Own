@@ -69,7 +69,7 @@ Both `FixedWallBoundary` and `MovingWallBoundary` implement:
 - `applyPressure()`: zero-gradient Neumann condition via ghost-cell copy
 - `applyFlux()`: sets F/G on boundary cells
 
-
+Beyond the strictly required implementations, several existing files were also lightly modified to improve code quality and performance. Loop orders in `Grid.cpp` were swapped to match column-major memory layout, magic number literals were replaced with named constants, and error handling was added for malformed geometry files. Performance-oriented changes included unchecked `fast()` accessors in Datastructures.hpp, precomputed reciprocals in Discretization.hpp, and compiler hint macros in the new Util.hpp to reduce overhead in the hot SOR and convection loops. Additionally, const-correctness fixes, constexpr upgrades, and the solver_type enum were introduced to make the codebase more robust and extensible beyond what Worksheet 1 explicitly required.
 
 ---
 
@@ -134,8 +134,6 @@ python3 run_studies.py 6         # fixed dt stability only
 python3 run_studies.py 7         # grid refinement only
 python3 run_studies.py 8         # viscosity / Re study only
 ```
-
-> Task 5 runs 9 full simulations (one per ω value) — allow ~30 min.
 
 ---
 
