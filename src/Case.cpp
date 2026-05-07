@@ -11,6 +11,7 @@ namespace filesystem = std::filesystem;
 
 #include <vtkCellData.h>
 #include <vtkDoubleArray.h>
+#include <vtkIntArray.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkSmartPointer.h>
@@ -42,6 +43,9 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     int itermax{};                        /* max. number of iterations for pressure per time step */
     double eps{};                         /* accuracy bound for pressure*/
     solver_type solver{solver_type::SOR_MEAN_CORRECTION}; /* type of solver */
+    // WS2 inlet velocities: used by Patrick's InFlowBoundary
+    double UIN{0.0};
+    double VIN{0.0};
 
     // R1: fail fast if the input file cannot be opened.
     if (!file.is_open()) {
@@ -91,10 +95,35 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                         std::exit(1);
                     }
                 }
+                // ── WS2 parameters ────────────────────────────────────────────────────
+                // Geometry file: read directly into _geom_name so set_file_names() can
+                // prepend the directory prefix. If absent, _geom_name stays "NONE" and
+                // the hardcoded lid-driven cavity fallback is used.
+                if (var == "geo_file") file >> _geom_name;
+                if (var == "UIN") file >> UIN;
+                if (var == "VIN") file >> VIN;
+                if (var == "energy_eq") {
+                    std::string s; file >> s;
+                    _energy_eq = (s == "on");
+                }
+                // wall_temp_3 / wall_temp_4 / wall_temp_5 etc.
+                // The PGM cell ID is embedded in the key name, so we parse it dynamically.
+                // A value of -1 marks an adiabatic wall. Stored in _wall_temperatures so
+                // Dani can apply temperature BCs keyed by cell->wall_id().
+                if (var.size() > 10 && var.rfind("wall_temp_", 0) == 0) {
+                    int wall_id = std::stoi(var.substr(10));
+                    double temp; file >> temp;
+                    _wall_temperatures[wall_id] = temp;
+                }
+                // Both spellings appear across the provided .dat files; just consume the value.
+                if (var == "num_walls" || var == "num_of_walls") { int n; file >> n; }
+                // → Dani: add TI, alpha, beta here
             }
         }
     }
     file.close();
+    _UIN = UIN;
+    _VIN = VIN;
 
     // R1: validate that all required physical parameters were actually set and
     //     are physically meaningful — catch missing/misspelled keys early.
@@ -175,6 +204,9 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     if (not _grid.fixed_wall_cells().empty()) {
         _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells()));
     }
+    // → Patrick: construct InFlowBoundary for _grid.inflow_cells() using _UIN and _VIN
+    // → Patrick: construct OutFlowBoundary for _grid.outflow_cells()
+    // → Dani: _wall_temperatures is populated here; use it for temperature BCs
 }
 
 void Case::set_file_names(std::string file_name) {
@@ -447,6 +479,32 @@ void Case::output_vtk(int timestep, int my_rank) {
     // Add Velocity to Structured Grid
     structuredGrid->GetCellData()->AddArray(Velocity);
     structuredGrid->GetPointData()->AddArray(VelocityPoints);
+
+    // ── Geometry / obstacle field ──────────────────────────────────────────────
+    // Encode cell type as an integer per cell so ParaView can colour obstacles without
+    // needing a separate geometry file. Domain boundary ghost cells are omitted (loop
+    // starts at 1), matching the same range used for Pressure and Velocity above.
+    // 0 = FLUID, 1 = FIXED_WALL, 2 = MOVING_WALL, 3 = INFLOW, 4 = OUTFLOW
+    vtkSmartPointer<vtkIntArray> Obstacle = vtkSmartPointer<vtkIntArray>::New();
+    Obstacle->SetName("obstacle");
+    Obstacle->SetNumberOfComponents(1);
+    for (int j = 1; j < _grid.domain().size_y + 1; j++) {
+        for (int i = 1; i < _grid.domain().size_x + 1; i++) {
+            int flag = 0;
+            switch (_grid.cells()(i, j).type()) {
+                case cell_type::FIXED_WALL:  flag = 1; break;
+                case cell_type::MOVING_WALL: flag = 2; break;
+                case cell_type::INFLOW:      flag = 3; break;
+                case cell_type::OUTFLOW:     flag = 4; break;
+                default:                     flag = 0; break;
+            }
+            Obstacle->InsertNextValue(flag);
+        }
+    }
+    structuredGrid->GetCellData()->AddArray(Obstacle);
+
+    // → Iciar: add _T matrix and T(i,j) accessor to Fields, then add temperature output here
+    //   analogous to Pressure above (vtkDoubleArray "temperature", InsertNextTuple per cell).
 
     // Write Grid
     vtkSmartPointer<vtkStructuredGridWriter> writer = vtkSmartPointer<vtkStructuredGridWriter>::New();

@@ -22,6 +22,8 @@ enum class cell_type {
     FLUID,
     FIXED_WALL,
     MOVING_WALL,
+    INFLOW,    // PGM value 1: Dirichlet velocity BC, Neumann pressure BC
+    OUTFLOW,   // PGM value 2: Neumann velocity BC, Dirichlet pressure BC (p = 0)
     DEFAULT,
 };
 

@@ -53,15 +53,27 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     for (int j_geom = _domain.jminb; j_geom < _domain.jmaxb; ++j_geom) {
         { i = 0; }
         for (int i_geom = _domain.iminb; i_geom < _domain.imaxb; ++i_geom) {
-            if (geometry_data.at(i_geom).at(j_geom) == 0) {
+            const int id = geometry_data.at(i_geom).at(j_geom);
+            if (id == 0) {
                 _cells(i, j) = Cell(i, j, cell_type::FLUID);
                 _fluid_cells.push_back(&_cells(i, j));
-            } else if (geometry_data.at(i_geom).at(j_geom) == LidDrivenCavity::moving_wall_id) {
-                _cells(i, j) = Cell(i, j, cell_type::MOVING_WALL, geometry_data.at(i_geom).at(j_geom));
+            } else if (id == 1) {
+                // Inflow cell (PGM value 1): Dirichlet velocity, Neumann pressure.
+                // Patrick: build InFlowBoundary using inflow_cells().
+                _cells(i, j) = Cell(i, j, cell_type::INFLOW, id);
+                _inflow_cells.push_back(&_cells(i, j));
+            } else if (id == 2) {
+                // Outflow cell (PGM value 2): Neumann velocity, Dirichlet pressure (p=0).
+                // Patrick: build OutFlowBoundary using outflow_cells().
+                _cells(i, j) = Cell(i, j, cell_type::OUTFLOW, id);
+                _outflow_cells.push_back(&_cells(i, j));
+            } else if (id == LidDrivenCavity::moving_wall_id) {
+                _cells(i, j) = Cell(i, j, cell_type::MOVING_WALL, id);
                 _moving_wall_cells.push_back(&_cells(i, j));
             } else {
-                // Outer walls and inner obstacles
-                _cells(i, j) = Cell(i, j, cell_type::FIXED_WALL, geometry_data.at(i_geom).at(j_geom));
+                // Fixed wall, IDs 3–7. The wall_id is stored in the Cell so that
+                // Dani can look up the correct wall temperature via _wall_temperatures.
+                _cells(i, j) = Cell(i, j, cell_type::FIXED_WALL, id);
                 _fixed_wall_cells.push_back(&_cells(i, j));
             }
 
@@ -272,5 +284,9 @@ const std::vector<Cell *> &Grid::fluid_cells() const { return _fluid_cells; }
 const std::vector<Cell *> &Grid::fixed_wall_cells() const { return _fixed_wall_cells; }
 
 const std::vector<Cell *> &Grid::moving_wall_cells() const { return _moving_wall_cells; }
+
+const std::vector<Cell *> &Grid::inflow_cells()  const { return _inflow_cells; }
+
+const std::vector<Cell *> &Grid::outflow_cells() const { return _outflow_cells; }
 
 Matrix<Cell> &Grid::cells() { return _cells; }

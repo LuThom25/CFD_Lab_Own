@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -72,6 +73,17 @@ class Case {
     double _omg{0.0};
     /// Name of the active pressure solver (stored for console output)
     std::string _solver_name{"SOR"};
+
+    // ── WS2: geometry and boundary parameters ─────────────────────────────────
+    /// Inlet x-velocity read from "UIN" in .dat (used by Patrick's InFlowBoundary)
+    double _UIN{0.0};
+    /// Inlet y-velocity read from "VIN" in .dat (used by Patrick's InFlowBoundary)
+    double _VIN{0.0};
+    /// True when "energy_eq on" appears in .dat (used by Dani/Iciar)
+    bool _energy_eq{false};
+    /// Wall temperatures keyed by PGM cell ID (3–7); -1.0 = adiabatic.
+    /// Read from wall_temp_3/4/5 entries in .dat. Used by Dani for temperature BCs.
+    std::map<int, double> _wall_temperatures;
 
     /**
      * @brief Creating file names from given input data file

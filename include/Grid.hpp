@@ -67,6 +67,22 @@ class Grid {
     const std::vector<Cell *> &fixed_wall_cells() const;
 
     /**
+     * @brief Access inflow cells (PGM value 1).
+     * Used by Patrick to construct InFlowBoundary.
+     *
+     * @param[out] vector of inflow cells
+     */
+    const std::vector<Cell *> &inflow_cells() const;
+
+    /**
+     * @brief Access outflow cells (PGM value 2).
+     * Used by Patrick to construct OutFlowBoundary.
+     *
+     * @param[out] vector of outflow cells
+     */
+    const std::vector<Cell *> &outflow_cells() const;
+
+    /**
      * @brief Access to all cells (including ghost cells)
      * 
      * @param[out] matrix of all cells
@@ -94,6 +110,10 @@ class Grid {
     std::vector<Cell *> _fixed_wall_cells;
     /// Vector of pointers to all cells belonging to moving walls
     std::vector<Cell *> _moving_wall_cells;
+    /// Vector of pointers to all inflow cells (PGM value 1)
+    std::vector<Cell *> _inflow_cells;
+    /// Vector of pointers to all outflow cells (PGM value 2)
+    std::vector<Cell *> _outflow_cells;
 
     /// Domain object holding geometrical information
     Domain _domain;
