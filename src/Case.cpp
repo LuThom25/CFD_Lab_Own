@@ -464,7 +464,7 @@ void Case::output_vtk(int timestep, int my_rank) {
             vel[0] = (_field.u(i - 1, j) + _field.u(i, j)) * 0.5;
             vel[1] = (_field.v(i, j - 1) + _field.v(i, j)) * 0.5;
             Velocity->InsertNextTuple(vel.data());
-            double temp = _field.t_matrix(i, j);        
+            double temp = _field.t(i, j);        
             Temperature->InsertNextTuple(&temp);
         }
     }
