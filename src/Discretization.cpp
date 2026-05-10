@@ -79,6 +79,19 @@ double Discretization::convection_v(const Matrix<double> &U, const Matrix<double
     return duv_dx + dv2_dy;
 }
 
+double Discretization::convection_T(const Matrix<double> &T, const Matrix<double> &U, const Matrix<double> &V, int i, int j){
+    double uT_dx;
+    double vT_dy;
+
+    uT_dx = 0.5 * (U(i,j) * (T(i,j) + T(i+1,j)) - U(i-1,j) * (T(i-1,j) + T(i,j))) / _dx 
+            + 0.5 * _gamma * (std::abs(U(i,j)) * (T(i,j) - T(i+1,j)) - std::abs(U(i-1,j)) * (T(i-1,j) - T(i,j))) / _dx;
+    vT_dy = 0.5 * (V(i,j) * (T(i,j) + T(i,j+1)) - V(i,j-1) * (T(i,j-1) + T(i,j))) / _dy 
+            + 0.5 * _gamma * (std::abs(V(i,j)) * (T(i,j) - T(i,j+1)) - std::abs(V(i,j-1)) * (T(i,j-1) - T(i,j))) / _dy;
+
+    return uT_dx + vT_dy;
+}
+
+// We can reuse the laplacian discretization inserting T in A
 double Discretization::laplacian(const Matrix<double> &A, int i, int j) {
     // Central difference discretization of the Laplace operator: d^2A/dx^2 + d^2A/dy^2
     // P2: fast() for unchecked access; P3: multiply by precomputed reciprocal.

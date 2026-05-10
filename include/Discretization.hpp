@@ -43,6 +43,7 @@ class Discretization {
      */
     static double convection_v(const Matrix<double> &U, const Matrix<double> &V, int i, int j);
 
+    static double convection_T(const Matrix<double> &T, const Matrix<double> &U, const Matrix<double> &V, int i, int j);
     /**
      * @brief Laplacian term discretization using central difference
      *

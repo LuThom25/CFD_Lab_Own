@@ -178,7 +178,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     build_domain(domain, imax, jmax);
 
     _grid = Grid(_geom_name, domain);
-    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI);
+    _field = Fields(nu, dt, tau, alpha, beta, l_grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     if (solver == solver_type::SOR_MEAN_CORRECTION) {
@@ -263,7 +263,7 @@ void Case::set_file_names(std::string file_name) {
  *
  * For information about the classes and functions, you can check the header files.
  */
-void Case::simulate() {
+void Case::simulate() {    // Inialize variables
     double t = 0.0;
     double dt = _field.dt();
     int timestep = 0;
@@ -316,7 +316,10 @@ void Case::simulate() {
         for (auto &boundary : _boundaries)
             boundary->applyVelocity(_field);
 
-        // Step 2: Intermediate fluxes F and G (Eq. 9 & 10)
+        // Step 2: Compute new temperature values (dependent on u and v)
+        _field.calculate_temperature(_grid);
+
+        // Step 3: Compute intermediate fluxes F and G (tilda)
         _field.calculate_fluxes(_grid);
 
         // Step 3: Flux BCs at walls
@@ -444,6 +447,11 @@ void Case::output_vtk(int timestep, int my_rank) {
     Velocity->SetName("velocity");
     Velocity->SetNumberOfComponents(3);
 
+    // Temperature array
+    vtkSmartPointer<vtkDoubleArray> Temperature = vtkSmartPointer<vtkDoubleArray>::New();
+    Temperature->SetName("velocity");
+    Temperature->SetNumberOfComponents(1);
+
     // Temp Velocity
     std::array<double, 3> vel;
     vel[2] = 0; // Set z component to 0
@@ -456,6 +464,8 @@ void Case::output_vtk(int timestep, int my_rank) {
             vel[0] = (_field.u(i - 1, j) + _field.u(i, j)) * 0.5;
             vel[1] = (_field.v(i, j - 1) + _field.v(i, j)) * 0.5;
             Velocity->InsertNextTuple(vel.data());
+            double temp = _field.t_matrix(i, j);        
+            Temperature->InsertNextTuple(&temp);
         }
     }
 
@@ -463,6 +473,7 @@ void Case::output_vtk(int timestep, int my_rank) {
     vtkSmartPointer<vtkDoubleArray> VelocityPoints = vtkSmartPointer<vtkDoubleArray>::New();
     VelocityPoints->SetName("velocity");
     VelocityPoints->SetNumberOfComponents(3);
+
 
     // Print Velocity from bottom to top
     for (int j = 0; j < _grid.domain().size_y + 1; j++) {
