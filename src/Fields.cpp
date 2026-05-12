@@ -36,7 +36,7 @@ void Fields::calculate_fluxes(Grid &grid) {
         // Eq. 10: G(i,j) = V + dt * (nu * laplacian(V) - convection_v)
         _G(i, j) = _V(i, j) + _dt * (_nu * Discretization::laplacian(_V, i, j)
             - Discretization::convection_v(_U, _V, i, j)) 
-            - _beta * 0.5 * _dt * (_T(i,j) + _T(i+1, j)) * _gy;
+            - _beta * 0.5 * _dt * (_T(i,j) + _T(i, j+1)) * _gy;
     }
 }
 

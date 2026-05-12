@@ -521,7 +521,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     // Temperature array
     vtkSmartPointer<vtkDoubleArray> Temperature = vtkSmartPointer<vtkDoubleArray>::New();
-    Temperature->SetName("velocity");
+    Temperature->SetName("temperature");
     Temperature->SetNumberOfComponents(1);
 
     // Temp Velocity
@@ -562,6 +562,7 @@ void Case::output_vtk(int timestep, int my_rank) {
     // Add Velocity to Structured Grid
     structuredGrid->GetCellData()->AddArray(Velocity);
     structuredGrid->GetPointData()->AddArray(VelocityPoints);
+    structuredGrid->GetCellData()->AddArray(Temperature);
 
     // ── Geometry / obstacle field ──────────────────────────────────────────────
     // Encode cell type as an integer per cell so ParaView can colour obstacles without
@@ -585,9 +586,6 @@ void Case::output_vtk(int timestep, int my_rank) {
         }
     }
     structuredGrid->GetCellData()->AddArray(Obstacle);
-
-    // → Iciar: add _T matrix and T(i,j) accessor to Fields, then add temperature output here
-    //   analogous to Pressure above (vtkDoubleArray "temperature", InsertNextTuple per cell).
 
     // Write Grid
     vtkSmartPointer<vtkStructuredGridWriter> writer = vtkSmartPointer<vtkStructuredGridWriter>::New();
