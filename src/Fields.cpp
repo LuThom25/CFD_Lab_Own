@@ -98,7 +98,7 @@ void Fields::calculate_temperature(Grid &grid) {
     _T = T_next; //Assignment operator
 }
 double Fields::calculate_dt(Grid &grid) {
-    // Implementing Eqs. 12 & 13: adaptive time step control based on three stability criteria.
+    // Adaptive time step control based on viscous, thermal, and convective stability limits.
     // Only recompute if tau > 0 (otherwise use the fixed dt from the input file).
     if (_tau <= 0.0) {
         return _dt;
@@ -109,6 +109,12 @@ double Fields::calculate_dt(Grid &grid) {
 
     // Eq. 12: viscous stability condition
     double dt_visc = (dx * dx * dy * dy) / (2.0 * _nu * (dx * dx + dy * dy));
+
+    // Explicit temperature diffusion stability condition. When the energy
+    // equation is disabled, alpha stays zero and this condition is inactive.
+    double dt_temp = (_alpha > 0.0)
+        ? (dx * dx * dy * dy) / (2.0 * _alpha * (dx * dx + dy * dy))
+        : std::numeric_limits<double>::max();
 
     // Eq. 13: convective (CFL) stability conditions — find max |u| and |v| over fluid cells
     double umax = 0.0;
@@ -123,7 +129,7 @@ double Fields::calculate_dt(Grid &grid) {
     double dt_u = (umax > 0.0) ? dx / umax : std::numeric_limits<double>::max();
     double dt_v = (vmax > 0.0) ? dy / vmax : std::numeric_limits<double>::max();
 
-    _dt = _tau * std::min({dt_visc, dt_u, dt_v});
+    _dt = _tau * std::min({dt_visc, dt_temp, dt_u, dt_v});
     return _dt;
 }
 
