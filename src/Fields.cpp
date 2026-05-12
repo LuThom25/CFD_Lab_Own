@@ -6,8 +6,9 @@
 #include "Communication.hpp"
 #include "Fields.hpp"
 
-Fields::Fields(double nu, double dt, double tau, double alpha, double beta, int imax, int jmax, double UI, double VI, double PI, double TI)
-    : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta) {
+Fields::Fields(double nu, double dt, double tau, double alpha, double beta, double gx, double gy, int imax, int jmax,
+               double UI, double VI, double PI, double TI)
+    : _nu(nu), _gx(gx), _gy(gy), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta) {
     _U = Matrix<double>(imax + 2, jmax + 2, UI);
     _V = Matrix<double>(imax + 2, jmax + 2, VI);
     _P = Matrix<double>(imax + 2, jmax + 2, PI);

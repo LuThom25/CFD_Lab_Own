@@ -25,7 +25,8 @@ class Fields {
      * @param[in] initial pressure
      *
      */
-    Fields(double _nu, double _dt, double _tau, double alpha, double beta, int imax, int jmax, double UI, double VI, double PI, double TI);
+    Fields(double _nu, double _dt, double _tau, double alpha, double beta, double gx, double gy, int imax, int jmax,
+           double UI, double VI, double PI, double TI);
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
@@ -94,6 +95,12 @@ class Fields {
 
     /// get adaptive timestep coefficient (tau <= 0 means fixed dt)
     double tau() const;
+
+    /// get thermal diffusivity
+    double alpha() const;
+
+    /// get thermal expansion coefficient
+    double beta() const;
 
     /// pressure matrix access and modify
     Matrix<double> &p_matrix();

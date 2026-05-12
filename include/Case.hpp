@@ -85,6 +85,11 @@ class Case {
     /// Read from wall_temp_3/4/5 entries in .dat. Used by Dani for temperature BCs.
     std::map<int, double> _wall_temperatures;
 
+    // WS2 energy transport variables
+    double TI{}; //initial temperature 
+    double alpha{}; //thermal conductivity
+    double beta{}; //thermal expansion
+
     /**
      * @brief Creating file names from given input data file
      *

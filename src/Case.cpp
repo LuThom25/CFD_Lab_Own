@@ -32,6 +32,9 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     double PI{};                          /* pressure */
     double GX{};                          /* gravitation x-direction */
     double GY{};                          /* gravitation y-direction */
+    double TI{};                          /* temperature */
+    double alpha{};                       /* thermal diffusivity */
+    double beta{};                        /* thermal expansion coefficient */
     double xlength{};                     /* length of the domain x-dir.*/
     double ylength{};                     /* length of the domain y-dir.*/
     double dt{};                          /* time step */
@@ -46,6 +49,9 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     // WS2 inlet velocities: used by Patrick's InFlowBoundary
     double UIN{0.0};
     double VIN{0.0};
+    bool has_TI{false};
+    bool has_alpha{false};
+    bool has_beta{false};
 
     // R1: fail fast if the input file cannot be opened.
     if (!file.is_open()) {
@@ -106,6 +112,18 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                     std::string s; file >> s;
                     _energy_eq = (s == "on");
                 }
+                if (var == "TI") {
+                    file >> TI;
+                    has_TI = true;
+                }
+                if (var == "alpha") {
+                    file >> alpha;
+                    has_alpha = true;
+                }
+                if (var == "beta") {
+                    file >> beta;
+                    has_beta = true;
+                }
                 // wall_temp_3 / wall_temp_4 / wall_temp_5 etc.
                 // The PGM cell ID is embedded in the key name, so we parse it dynamically.
                 // A value of -1 marks an adiabatic wall. Stored in _wall_temperatures so
@@ -117,7 +135,6 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 }
                 // Both spellings appear across the provided .dat files; just consume the value.
                 if (var == "num_walls" || var == "num_of_walls") { int n; file >> n; }
-                // → Dani: add TI, alpha, beta here
             }
         }
     }
@@ -159,6 +176,24 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
         std::cerr << "Error: itermax must be > 0 (got " << itermax << ").\n";
         std::exit(1);
     }
+    if (_energy_eq) {
+        if (!has_TI) {
+            std::cerr << "Error: energy_eq is on but TI is missing from the input file.\n";
+            std::exit(1);
+        }
+        if (!has_alpha) {
+            std::cerr << "Error: energy_eq is on but alpha is missing from the input file.\n";
+            std::exit(1);
+        }
+        if (!has_beta) {
+            std::cerr << "Error: energy_eq is on but beta is missing from the input file.\n";
+            std::exit(1);
+        }
+        if (alpha <= 0.0) {
+            std::cerr << "Error: alpha must be > 0 when energy_eq is on (got " << alpha << ").\n";
+            std::exit(1);
+        }
+    }
 
     std::map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
@@ -178,7 +213,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     build_domain(domain, imax, jmax);
 
     _grid = Grid(_geom_name, domain);
-    _field = Fields(nu, dt, tau, alpha, beta, l_grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
+    _field = Fields(nu, dt, tau, alpha, beta, GX, GY, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     if (solver == solver_type::SOR_MEAN_CORRECTION) {
