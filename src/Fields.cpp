@@ -80,8 +80,8 @@ void Fields::calculate_velocities(Grid &grid) {
 }
 
 void Fields::calculate_temperature(Grid &grid) {
-    // Initialize update temperature matrix
-    Matrix<double> T_next(_T.num_cols(), _T.num_rows());
+    // Start from the current field so non-fluid/ghost values are preserved.
+    Matrix<double> T_next = _T;
 
     for (auto cell : grid.fluid_cells()) {
         int i = cell->i();
@@ -92,9 +92,6 @@ void Fields::calculate_temperature(Grid &grid) {
 
         T_next(i,j) = _T(i,j) + _dt * (_alpha * laplacianT - convectionT);
     }
-    // apply boundary conditions
-
-    // update T
     _T = T_next; //Assignment operator
 }
 double Fields::calculate_dt(Grid &grid) {

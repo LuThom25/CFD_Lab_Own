@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <vector>
 
 #include "Cell.hpp"
@@ -33,6 +34,13 @@ class Boundary {
      */
     virtual void applyFlux(Fields &field);
 
+    /**
+     * @brief Method to patch the temperature boundary conditions to the given field.
+     *
+     * @param[in] Field to be applied
+     */
+    virtual void applyTemperature(Fields &field);
+
     virtual ~Boundary() = default;
 
   protected:
@@ -51,6 +59,7 @@ class FixedWallBoundary : public Boundary {
     virtual ~FixedWallBoundary() = default;
     virtual void applyVelocity(Fields &field);
     virtual void applyPressure(Fields &field);
+    virtual void applyTemperature(Fields &field);
 
   private:
     std::map<int, double> _wall_temperature;
@@ -64,11 +73,13 @@ class FixedWallBoundary : public Boundary {
 class MovingWallBoundary : public Boundary {
   public:
     MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity);
+    MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity, std::map<int, double> wall_temperature);
     MovingWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_velocity,
                        std::map<int, double> wall_temperature);
     virtual ~MovingWallBoundary() = default;
     virtual void applyVelocity(Fields &field);
     virtual void applyPressure(Fields &field);
+    virtual void applyTemperature(Fields &field);
 
   private:
     std::map<int, double> _wall_velocity;

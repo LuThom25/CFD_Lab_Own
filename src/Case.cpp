@@ -213,6 +213,29 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     build_domain(domain, imax, jmax);
 
     _grid = Grid(_geom_name, domain);
+    if (_energy_eq) {
+        std::vector<int> missing_wall_temperature_ids;
+        auto collect_missing_wall_temperatures = [&](const std::vector<Cell *> &cells) {
+            for (auto cell : cells) {
+                const int wall_id = cell->wall_id();
+                if (_wall_temperatures.find(wall_id) != _wall_temperatures.end()) continue;
+                if (std::find(missing_wall_temperature_ids.begin(), missing_wall_temperature_ids.end(), wall_id)
+                    == missing_wall_temperature_ids.end()) {
+                    missing_wall_temperature_ids.push_back(wall_id);
+                }
+            }
+        };
+
+        collect_missing_wall_temperatures(_grid.fixed_wall_cells());
+        collect_missing_wall_temperatures(_grid.moving_wall_cells());
+
+        if (!missing_wall_temperature_ids.empty()) {
+            std::cerr << "Error: energy_eq is on but wall_temp entries are missing for wall id(s):";
+            for (int wall_id : missing_wall_temperature_ids) std::cerr << ' ' << wall_id;
+            std::cerr << ".\n";
+            std::exit(1);
+        }
+    }
     _field = Fields(nu, dt, tau, alpha, beta, GX, GY, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
@@ -233,11 +256,12 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
 
     // Construct boundaries
     if (not _grid.moving_wall_cells().empty()) {
-        _boundaries.push_back(
-            std::make_unique<MovingWallBoundary>(_grid.moving_wall_cells(), LidDrivenCavity::wall_velocity));
+        _boundaries.push_back(std::make_unique<MovingWallBoundary>(_grid.moving_wall_cells(),
+                                                                   LidDrivenCavity::wall_velocity,
+                                                                   _wall_temperatures));
     }
     if (not _grid.fixed_wall_cells().empty()) {
-        _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells()));
+        _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells(), _wall_temperatures));
     }
     // → Patrick: construct InFlowBoundary for _grid.inflow_cells() using _UIN and _VIN
     // → Patrick: construct OutFlowBoundary for _grid.outflow_cells()
@@ -341,6 +365,10 @@ void Case::simulate() {    // Inialize variables
               << std::flush;
 
     // ── Initial state ──────────────────────────────────────────────────────────
+    if (_energy_eq) {
+        for (auto &boundary : _boundaries)
+            boundary->applyTemperature(_field);
+    }
     output_vtk(timestep);
     vtk_count++;
 
@@ -351,8 +379,17 @@ void Case::simulate() {    // Inialize variables
         for (auto &boundary : _boundaries)
             boundary->applyVelocity(_field);
 
+        if (_energy_eq) {
+            for (auto &boundary : _boundaries)
+                boundary->applyTemperature(_field);
+        }
+
         // Step 2: Compute new temperature values (dependent on u and v)
-        _field.calculate_temperature(_grid);
+        if (_energy_eq) {
+            _field.calculate_temperature(_grid);
+            for (auto &boundary : _boundaries)
+                boundary->applyTemperature(_field);
+        }
 
         // Step 3: Compute intermediate fluxes F and G (tilda)
         _field.calculate_fluxes(_grid);

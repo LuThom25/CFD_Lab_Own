@@ -1,8 +1,44 @@
 #include "Boundary.hpp"
 
+namespace {
+constexpr double ADIABATIC_WALL_TEMPERATURE = -1.0;
+
+double ghost_temperature(double wall_temperature, double fluid_temperature) {
+    if (wall_temperature == ADIABATIC_WALL_TEMPERATURE) return fluid_temperature;
+    return 2.0 * wall_temperature - fluid_temperature;
+}
+
+void apply_wall_temperature(Fields &field, const std::vector<Cell *> &cells,
+                            const std::map<int, double> &wall_temperature) {
+    for (auto cell : cells) {
+        const auto wall_temperature_it = wall_temperature.find(cell->wall_id());
+        if (wall_temperature_it == wall_temperature.end()) continue;
+
+        const double T_wall = wall_temperature_it->second;
+        const int i = cell->i();
+        const int j = cell->j();
+
+        if (cell->is_border(border_position::RIGHT)) {
+            field.t(i, j) = ghost_temperature(T_wall, field.t(i + 1, j));
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.t(i, j) = ghost_temperature(T_wall, field.t(i - 1, j));
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.t(i, j) = ghost_temperature(T_wall, field.t(i, j + 1));
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.t(i, j) = ghost_temperature(T_wall, field.t(i, j - 1));
+        }
+    }
+}
+} // namespace
+
 Boundary::Boundary(std::vector<Cell *> cells) : _cells(cells) {}
 
 void Boundary::applyFlux(Fields & /*field*/) {}
+
+void Boundary::applyTemperature(Fields & /*field*/) {}
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : Boundary(cells) {}
 
@@ -71,7 +107,17 @@ void FixedWallBoundary::applyPressure(Fields &field) {
     }
 }
 
+void FixedWallBoundary::applyTemperature(Fields &field) {
+    apply_wall_temperature(field, _cells, _wall_temperature);
+}
+
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : Boundary(cells) {
+    _wall_velocity.insert(std::pair(LidDrivenCavity::moving_wall_id, wall_velocity));
+}
+
+MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity,
+                                       std::map<int, double> wall_temperature)
+    : Boundary(cells), _wall_temperature(wall_temperature) {
     _wall_velocity.insert(std::pair(LidDrivenCavity::moving_wall_id, wall_velocity));
 }
 
@@ -121,4 +167,8 @@ void MovingWallBoundary::applyPressure(Fields &field) {
             field.p(i, j) = field.p(i, j - 1);
         }
     }
+}
+
+void MovingWallBoundary::applyTemperature(Fields &field) {
+    apply_wall_temperature(field, _cells, _wall_temperature);
 }
