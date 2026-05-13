@@ -45,26 +45,17 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     double tau{};                         /* safety factor for time step*/
     int itermax{};                        /* max. number of iterations for pressure per time step */
     double eps{};                         /* accuracy bound for pressure*/
-    solver_type solver{solver_type::SOR_MEAN_CORRECTION}; /* type of solver */
-    // WS2 inlet velocities: used by Patrick's InFlowBoundary
-    double UIN{0.0};
-    double VIN{0.0};
-    bool has_TI{false};
-    bool has_alpha{false};
+    double UIN{0.0};                      /* inlet velocity in x-dir */
+    double VIN{0.0};                      /* inlet velocity in y-dir */
+    bool has_TI{false};                   /* False if we dont want to include heat eq. True otherwise*/
+    bool has_alpha{false};                /* thermal diffusivity */
     bool has_beta{false};
 
-    // R1: fail fast if the input file cannot be opened.
-    if (!file.is_open()) {
-        std::cerr << "Error: could not open input file '" << file_name << "'.\n";
-        std::exit(1);
-    }
-
-    {
+    if (file.is_open()) {
+ 
         std::string var;
         while (!file.eof() && file.good()) {
             file >> var;
-            // R1: guard against empty token (e.g. trailing whitespace at EOF).
-            if (var.empty()) continue;
             if (var[0] == '#') { /* ignore comment line */
                 file.ignore(MAX_LINE_LENGTH, '\n');
             } else {
@@ -86,26 +77,13 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 if (var == "itermax") file >> itermax;
                 if (var == "imax") file >> imax;
                 if (var == "jmax") file >> jmax;
-                if (var == "solver") {
-                    std::string solver_str;
-                    file >> solver_str;
-                    if (solver_str == "SOR_MEAN_CORRECTION")
-                        solver = solver_type::SOR_MEAN_CORRECTION;
-                    else if (solver_str == "SOR_RB")
-                        solver = solver_type::SOR_RB;
-                    else if (solver_str == "SOR_STANDARD")
-                        solver = solver_type::SOR_STANDARD;
-                    else {
-                        std::cerr << "Error: unknown solver type '" << solver_str << "'.\n";
-                        std::cerr << "  Valid options: SOR_MEAN_CORRECTION  SOR_RB  SOR_STANDARD\n";
-                        std::exit(1);
-                    }
-                }
-                // ── WS2 parameters ────────────────────────────────────────────────────
-                // Geometry file: read directly into _geom_name so set_file_names() can
-                // prepend the directory prefix. If absent, _geom_name stays "NONE" and
-                // the hardcoded lid-driven cavity fallback is used.
-                if (var == "geo_file") file >> _geom_name;
+
+                /* WS2 parameters 
+                 *  Geometry file: read directly into _geom_name so set_file_names() can
+                 *  prepend the directory prefix. If absent, _geom_name stays "NONE" and
+                 *  the hardcoded lid-driven cavity fallback is used.
+                 */
+                if (var == "geo_file") file >> _geom_name; /* */
                 if (var == "UIN") file >> UIN;
                 if (var == "VIN") file >> VIN;
                 if (var == "energy_eq") {
@@ -142,59 +120,6 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     _UIN = UIN;
     _VIN = VIN;
 
-    // R1: validate that all required physical parameters were actually set and
-    //     are physically meaningful — catch missing/misspelled keys early.
-    if (nu <= 0.0) {
-        std::cerr << "Error: nu must be > 0 (got " << nu << ").\n";
-        std::exit(1);
-    }
-    if (imax <= 0) {
-        std::cerr << "Error: imax must be > 0 (got " << imax << ").\n";
-        std::exit(1);
-    }
-    if (jmax <= 0) {
-        std::cerr << "Error: jmax must be > 0 (got " << jmax << ").\n";
-        std::exit(1);
-    }
-    if (xlength <= 0.0) {
-        std::cerr << "Error: xlength must be > 0 (got " << xlength << ").\n";
-        std::exit(1);
-    }
-    if (ylength <= 0.0) {
-        std::cerr << "Error: ylength must be > 0 (got " << ylength << ").\n";
-        std::exit(1);
-    }
-    if (_t_end <= 0.0) {
-        std::cerr << "Error: t_end must be > 0 (got " << _t_end << ").\n";
-        std::exit(1);
-    }
-    if (eps <= 0.0) {
-        std::cerr << "Error: eps must be > 0 (got " << eps << ").\n";
-        std::exit(1);
-    }
-    if (itermax <= 0) {
-        std::cerr << "Error: itermax must be > 0 (got " << itermax << ").\n";
-        std::exit(1);
-    }
-    if (_energy_eq) {
-        if (!has_TI) {
-            std::cerr << "Error: energy_eq is on but TI is missing from the input file.\n";
-            std::exit(1);
-        }
-        if (!has_alpha) {
-            std::cerr << "Error: energy_eq is on but alpha is missing from the input file.\n";
-            std::exit(1);
-        }
-        if (!has_beta) {
-            std::cerr << "Error: energy_eq is on but beta is missing from the input file.\n";
-            std::exit(1);
-        }
-        if (alpha <= 0.0) {
-            std::cerr << "Error: alpha must be > 0 when energy_eq is on (got " << alpha << ").\n";
-            std::exit(1);
-        }
-    }
-
     std::map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
         wall_vel.insert(std::pair<int, double>(LidDrivenCavity::moving_wall_id, LidDrivenCavity::wall_velocity));
@@ -212,6 +137,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
 
     build_domain(domain, imax, jmax);
 
+    // I THINK I DONT UNDERSTAND WHAT IS DONE HERE.... MAYBE CLEAN THIS UP TOO
     _grid = Grid(_geom_name, domain);
     if (_energy_eq) {
         std::vector<int> missing_wall_temperature_ids;
@@ -239,22 +165,13 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     _field = Fields(nu, dt, tau, alpha, beta, GX, GY, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
-    if (solver == solver_type::SOR_MEAN_CORRECTION) {
-        _pressure_solver = std::make_unique<SOR_Mean_Correction>(omg);
-        _solver_name = "SOR_MEAN_CORRECTION";
-    } else if (solver == solver_type::SOR_RB) {
-        _pressure_solver = std::make_unique<SOR_RB>(omg);
-        _solver_name = "SOR_RB";
-    } else if (solver == solver_type::SOR_STANDARD) {
-        _pressure_solver = std::make_unique<SOR_Standard>(omg);
-        _solver_name = "SOR_STANDARD";
-    }
+    _pressure_solver = std::make_unique<SOR_Standard>(omg);
     _max_iter = itermax;
     _tolerance = eps;
     _nu = nu;
     _omg = omg;
 
-    // Construct boundaries
+    // Construct boundaries 
     if (not _grid.moving_wall_cells().empty()) {
         _boundaries.push_back(std::make_unique<MovingWallBoundary>(_grid.moving_wall_cells(),
                                                                    LidDrivenCavity::wall_velocity,
@@ -263,14 +180,12 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     if (not _grid.fixed_wall_cells().empty()) {
         _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells(), _wall_temperatures));
     }
-    // → Patrick: construct InFlowBoundary for _grid.inflow_cells() using _UIN and _VIN
-    // → Patrick: construct OutFlowBoundary for _grid.outflow_cells()
-    // → Dani: _wall_temperatures is populated here; use it for temperature BCs
 }
 
 void Case::set_file_names(std::string file_name) {
-    // CQ2: use std::filesystem::path for portable, readable path decomposition
-    //      instead of the previous manual character-by-character reverse loop.
+    /* Use std::filesystem::path for portable, readable path decomposition
+     * instead of the previous manual character-by-character reverse loop.
+     */
     filesystem::path fp(file_name);
 
     // Stem = filename without extension, e.g. "LidDrivenCavity"
@@ -329,42 +244,9 @@ void Case::simulate() {    // Inialize variables
     int vtk_count = 0;
     double output_counter = 0.0;
 
-    // Bookkeeping for console output and the machine-readable SUMMARY line
-    int last_sor_iter = 0;
-    double last_sor_res = 0.0;
-    long total_sor_iter = 0;
-    int max_sor_iter = 0;
-    double total_res_sum = 0.0; // sum of achieved residuals for avg_res
-    double total_dt_sum = 0.0;
-    bool diverged = false;
+    bool diverged = false; // Boolean to check for divergence
 
-    // ── Start-up header ────────────────────────────────────────────────────────
-    // Re = U*L/nu with U=1, L=1 (lid-driven cavity scaling)
-    double Re = (_nu > 0.0) ? (1.0 / _nu) : std::numeric_limits<double>::infinity();
-    std::cout << "\n============================================================\n"
-              << " Fluidchen CFD Solver  —  " << _case_name << "\n"
-              << "============================================================\n"
-              << std::fixed << std::setprecision(4) << "  Grid    : " << _grid.size_x() << " x " << _grid.size_y()
-              << "  (dx=" << _grid.dx() << "  dy=" << _grid.dy() << ")\n"
-              << "  nu      : " << _nu << "   Re ~ " << std::setprecision(0) << Re << "\n"
-              << std::setprecision(2) << "  t_end   : " << _t_end << "   output every " << _output_freq
-              << " time units\n";
-
-    if (_field.tau() > 0.0)
-        std::cout << "  dt      : adaptive (tau=" << _field.tau() << ")   initial dt = " << std::setprecision(6) << dt
-                  << "\n";
-    else
-        std::cout << "  dt      : FIXED = " << std::setprecision(6) << dt << "   (adaptive disabled — tau <= 0)\n";
-
-    std::cout << "  Solver  : " << std::left << std::setw(10) << _solver_name
-              << "  omega=" << std::fixed << std::setprecision(2) << _omg
-              << "   itermax=" << _max_iter
-              << "   eps=" << std::scientific << std::setprecision(2) << _tolerance << "\n"
-              << "  Output  : " << _dict_name << "/\n"
-              << "------------------------------------------------------------\n"
-              << std::flush;
-
-    // ── Initial state ──────────────────────────────────────────────────────────
+    // Initial state 
     if (_energy_eq) {
         for (auto &boundary : _boundaries)
             boundary->applyTemperature(_field);
@@ -372,104 +254,69 @@ void Case::simulate() {    // Inialize variables
     output_vtk(timestep);
     vtk_count++;
 
-    // ── Main loop (Chorin Projection / fractional-step method) ────────────────
+    // Loop over time 
     while (t < _t_end) {
 
         // Step 1: Velocity BCs (ghost cells, moving lid)
         for (auto &boundary : _boundaries)
             boundary->applyVelocity(_field);
 
-        if (_energy_eq) {
-            for (auto &boundary : _boundaries)
-                boundary->applyTemperature(_field);
-        }
-
-        // Step 2: Compute new temperature values (dependent on u and v)
+        // Step 2: Compute new temperature values (dependent on u and v) and apply BCs
         if (_energy_eq) {
             _field.calculate_temperature(_grid);
             for (auto &boundary : _boundaries)
                 boundary->applyTemperature(_field);
         }
 
-        // Step 3: Compute intermediate fluxes F and G (tilda)
+        // Step 3: Compute intermediate fluxes F and G (tilda) and their BCs
         _field.calculate_fluxes(_grid);
-
-        // Step 3: Flux BCs at walls
         for (auto &boundary : _boundaries)
             boundary->applyFlux(_field);
 
-        // Step 4: RHS of pressure Poisson equation (Eq. 11)
+        // Step 4: Calculate the RHS of pressure Poisson equation 
         _field.calculate_rs(_grid);
 
-        // Step 5: SOR pressure solve — iterate until res < eps or itermax reached
-        int iter = 0;
+        // Step 5: SOR pressure solve: iterate until res < eps or itermax reached
+        // Initialize SOR stopping criteria
+        int iter = 0;               
         double residual = std::numeric_limits<double>::max();
+        // Call SOR solve outputting the residual after solving the PPE
         while (iter < _max_iter && residual > _tolerance) {
             residual = _pressure_solver->solve(_field, _grid, _boundaries);
+            // Apply BCs on the pressure field
             for (auto &boundary : _boundaries)
                 boundary->applyPressure(_field);
             ++iter;
         }
-        last_sor_iter = iter;
-        last_sor_res = residual;
-        total_sor_iter += iter;
-        total_res_sum += residual;
-        if (iter > max_sor_iter) max_sor_iter = iter;
 
-        // Divergence check — NaN/Inf residual or runaway values signal instability
+        // Divergence check:
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
             ++timestep; // count this step so avg_sor = total_iter / total_steps is bounded by itermax
             std::cout << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t << "  step=" << timestep
-                      << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n"
-                      << "           Possible cause: dt too large (CFL violation).\n"
-                      << "           Try smaller dt, or enable adaptive stepping (tau > 0).\n";
+                      << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n";
             diverged = true;
             break;
         }
 
-        // Step 6: Correct velocities using updated pressure (Eq. 7 & 8)
+        // Step 6: Correct velocities using updated pressure 
         _field.calculate_velocities(_grid);
 
-        // Step 7: Compute adaptive dt for the next step (Eqs. 12 & 13)
+        // Step 7: Compute adaptive dt for the next timestep 
         dt = _field.calculate_dt(_grid);
-        total_dt_sum += dt;
 
+        // Update time, timestep and counter
         t += dt;
         ++timestep;
         output_counter += dt;
 
-        // Step 8: VTK output + progress line at each output interval
+        // Step 8: VTK output 
+        // only output when enough simulated time has passed to avoid having thousands of ouput vtk
         if (output_counter >= _output_freq) {
             output_vtk(timestep);
             vtk_count++;
             output_counter -= _output_freq;
-
-            std::cout << "  [vtk=" << std::setw(3) << vtk_count << " | t=" << std::fixed << std::setprecision(3)
-                      << std::setw(8) << t << " | step=" << std::setw(6) << timestep << " | dt=" << std::scientific
-                      << std::setprecision(2) << dt << " | SOR: iter=" << std::setw(3) << last_sor_iter
-                      << "  res=" << std::setprecision(2) << last_sor_res << "]\n"
-                      << std::flush;
         }
     }
-
-    // ── Final summary ─────────────────────────────────────────────────────────
-    double avg_sor = (timestep > 0) ? static_cast<double>(total_sor_iter) / timestep : 0.0;
-    double avg_res = (timestep > 0) ? total_res_sum / timestep : last_sor_res;
-    double avg_dt = (timestep > 0) ? total_dt_sum / timestep : dt;
-
-    std::cout << "------------------------------------------------------------\n"
-              << "  Done: t=" << std::fixed << std::setprecision(3) << t << "  steps=" << timestep
-              << "  VTK files=" << vtk_count << "\n"
-              << "  SOR : avg=" << std::fixed << std::setprecision(1) << avg_sor << "  max=" << max_sor_iter
-              << "  avg_dt=" << std::scientific << std::setprecision(2) << avg_dt << "\n\n";
-
-    // One-line machine-readable summary (parsed by run_studies.py)
-    std::cout << "SUMMARY"
-              << " t=" << std::fixed << std::setprecision(3) << t << " steps=" << timestep << " vtk=" << vtk_count
-              << " avg_sor=" << std::fixed << std::setprecision(1) << avg_sor << " max_sor=" << max_sor_iter
-              << " avg_res=" << std::scientific << std::setprecision(2) << avg_res << " avg_dt=" << std::scientific
-              << std::setprecision(2) << avg_dt << " solver=" << _solver_name
-              << " status=" << (diverged ? "DIVERGED" : "OK") << "\n";
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
@@ -564,11 +411,12 @@ void Case::output_vtk(int timestep, int my_rank) {
     structuredGrid->GetPointData()->AddArray(VelocityPoints);
     structuredGrid->GetCellData()->AddArray(Temperature);
 
-    // ── Geometry / obstacle field ──────────────────────────────────────────────
-    // Encode cell type as an integer per cell so ParaView can colour obstacles without
-    // needing a separate geometry file. Domain boundary ghost cells are omitted (loop
-    // starts at 1), matching the same range used for Pressure and Velocity above.
-    // 0 = FLUID, 1 = FIXED_WALL, 2 = MOVING_WALL, 3 = INFLOW, 4 = OUTFLOW
+    /* Geometry / obstacle field 
+     *  Encode cell type as an integer per cell so ParaView can colour obstacles without
+     *  needing a separate geometry file. Domain boundary ghost cells are omitted (loop
+     *  starts at 1), matching the same range used for Pressure and Velocity above.
+     *  0 = FLUID, 1 = FIXED_WALL, 2 = MOVING_WALL, 3 = INFLOW, 4 = OUTFLOW
+     */
     vtkSmartPointer<vtkIntArray> Obstacle = vtkSmartPointer<vtkIntArray>::New();
     Obstacle->SetName("obstacle");
     Obstacle->SetNumberOfComponents(1);
@@ -597,14 +445,6 @@ void Case::output_vtk(int timestep, int my_rank) {
     writer->SetFileName(outputname.c_str());
     writer->SetInputData(structuredGrid);
     writer->Write();
-
-    // R3: verify the file was actually created — catches silent failures due to
-    //     disk-full conditions or permission errors (vtkStructuredGridWriter
-    //     returns void and does not throw on failure).
-    if (!filesystem::exists(outputname)) {
-        std::cerr << "Warning: VTK output file was not created: " << outputname << "\n"
-                  << "         Check available disk space and write permissions.\n";
-    }
 }
 
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain) {
