@@ -99,7 +99,7 @@ class Fields {
     /// get thermal diffusivity
     double alpha() const;
 
-    /// get thermal expansion coefficient
+    /// get thermal diffusivity
     double beta() const;
 
     /// pressure matrix access and modify
