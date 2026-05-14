@@ -155,6 +155,26 @@ void FixedWallBoundary::applyTemperature(Fields &field) {
     apply_wall_temperature(field, _cells, _wall_temperature);
 }
 
+void FixedWallBoundary::applyFluxTop(Fields &field, int i, int j) {
+    field.f(i, j) = field.u(i, j);
+    field.g(i, j) = 0.0;
+}
+
+void FixedWallBoundary::applyFluxBottom(Fields &field, int i, int j) {
+    field.f(i, j) = field.u(i, j);
+    field.g(i, j - 1) = 0.0;
+}
+
+void FixedWallBoundary::applyFluxLeft(Fields &field, int i, int j) {
+    field.f(i - 1, j) = 0.0;
+    field.g(i, j) = field.v(i, j);
+}
+
+void FixedWallBoundary::applyFluxRight(Fields &field, int i, int j) {
+    field.f(i, j) = 0.0;
+    field.g(i, j) = field.v(i, j);
+}
+
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : Boundary(cells) {
     _wall_velocity.insert(std::pair(LidDrivenCavity::moving_wall_id, wall_velocity));
 }

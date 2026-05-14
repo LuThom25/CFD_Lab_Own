@@ -92,20 +92,14 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 }
                 if (var == "TI") {
                     file >> TI;
-                    has_TI = true;
                 }
                 if (var == "alpha") {
                     file >> alpha;
-                    has_alpha = true;
                 }
                 if (var == "beta") {
                     file >> beta;
-                    has_beta = true;
                 }
-                // wall_temp_3 / wall_temp_4 / wall_temp_5 etc.
-                // The PGM cell ID is embedded in the key name, so we parse it dynamically.
-                // A value of -1 marks an adiabatic wall. Stored in _wall_temperatures so
-                // Dani can apply temperature BCs keyed by cell->wall_id().
+                // Read wall temperatures
                 if (var.size() > 10 && var.rfind("wall_temp_", 0) == 0) {
                     int wall_id = std::stoi(var.substr(10));
                     double temp;
@@ -117,10 +111,6 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                     int n;
                     file >> n;
                 }
-                // → Dani: add TI, alpha, beta here
-                if (var == "TI") file >> TI;
-                if (var == "alpha") file >> alpha;
-                if (var == "beta") file >> beta;
             }
         }
     }
@@ -147,7 +137,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
 
     // I THINK I DONT UNDERSTAND WHAT IS DONE HERE.... MAYBE CLEAN THIS UP TOO
     _grid = Grid(_geom_name, domain);
-    _field = Fields(nu, dt, tau, alpha, beta, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
+    _field = Fields(nu, dt, tau, alpha, beta, GX, GY, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     _pressure_solver = std::make_unique<SOR_Standard>(omg);

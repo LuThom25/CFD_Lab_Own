@@ -49,11 +49,6 @@ class Boundary {
     virtual void applyFluxLeft(Fields &, int, int) {};
     virtual void applyFluxRight(Fields &, int, int) {};
 
-    /**
-     * @brief Method to patch the temperature boundary conditions to the given field.
-     *
-     * @param[in] Field to be applied
-     */
     virtual void applyTemperature(Fields &field);
 
     virtual ~Boundary() = default;
@@ -87,6 +82,8 @@ class FixedWallBoundary : public Boundary {
     void applyFluxBottom(Fields &field, int i, int j) override;
     void applyFluxLeft(Fields &field, int i, int j) override;
     void applyFluxRight(Fields &field, int i, int j) override;
+
+    void applyTemperature(Fields &field) override;
 
   private:
     std::map<int, double> _wall_temperature;
@@ -142,4 +139,20 @@ class InFlowBoundary : public Boundary {
   private:
     double _u_in;
     double _v_in;
+};
+
+class OutFlowBoundary : public Boundary {
+  public:
+    OutFlowBoundary(std::vector<Cell *> cells);
+    ~OutFlowBoundary() = default;
+
+    void applyVelocityTop(Fields &field, int i, int j) override;
+    void applyVelocityBottom(Fields &field, int i, int j) override;
+    void applyVelocityLeft(Fields &field, int i, int j) override;
+    void applyVelocityRight(Fields &field, int i, int j) override;
+
+    void applyPressureTop(Fields &field, int i, int j) override;
+    void applyPressureBottom(Fields &field, int i, int j) override;
+    void applyPressureLeft(Fields &field, int i, int j) override;
+    void applyPressureRight(Fields &field, int i, int j) override;
 };
