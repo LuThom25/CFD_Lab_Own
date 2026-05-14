@@ -121,6 +121,9 @@ template <typename T> class Matrix {
     /// get the number of elements in y direction
     int num_rows() const { return _num_rows; }
 
+    /// get a pointer to the underlying vector
+    std::vector<T> *container() { return &_container; }
+
   private:
     /// Number of elements in x direction
     int _num_cols;

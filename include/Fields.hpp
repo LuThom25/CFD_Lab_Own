@@ -95,6 +95,12 @@ class Fields {
     /// get adaptive timestep coefficient (tau <= 0 means fixed dt)
     double tau() const;
 
+    /// get thermal diffusivity
+    double alpha() const;
+
+    /// get thermal diffusivity
+    double beta() const;
+
     /// pressure matrix access and modify
     Matrix<double> &p_matrix();
 

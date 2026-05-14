@@ -26,26 +26,29 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    double nu{};                          /* viscosity   */
-    double UI{};                          /* velocity x-direction */
-    double VI{};                          /* velocity y-direction */
-    double PI{};                          /* pressure */
-    double GX{};                          /* gravitation x-direction */
-    double GY{};                          /* gravitation y-direction */
-    double xlength{};                     /* length of the domain x-dir.*/
-    double ylength{};                     /* length of the domain y-dir.*/
-    double dt{};                          /* time step */
-    int imax{};                           /* number of cells x-direction*/
-    int jmax{};                           /* number of cells y-direction*/
-    double gamma{};                       /* uppwind differencing factor*/
-    double omg{};                         /* relaxation factor */
-    double tau{};                         /* safety factor for time step*/
-    int itermax{};                        /* max. number of iterations for pressure per time step */
-    double eps{};                         /* accuracy bound for pressure*/
+    double nu{};                                          /* viscosity   */
+    double UI{};                                          /* velocity x-direction */
+    double VI{};                                          /* velocity y-direction */
+    double PI{};                                          /* pressure */
+    double GX{};                                          /* gravitation x-direction */
+    double GY{};                                          /* gravitation y-direction */
+    double xlength{};                                     /* length of the domain x-dir.*/
+    double ylength{};                                     /* length of the domain y-dir.*/
+    double dt{};                                          /* time step */
+    int imax{};                                           /* number of cells x-direction*/
+    int jmax{};                                           /* number of cells y-direction*/
+    double gamma{};                                       /* uppwind differencing factor*/
+    double omg{};                                         /* relaxation factor */
+    double tau{};                                         /* safety factor for time step*/
+    int itermax{};                                        /* max. number of iterations for pressure per time step */
+    double eps{};                                         /* accuracy bound for pressure*/
     solver_type solver{solver_type::SOR_MEAN_CORRECTION}; /* type of solver */
     // WS2 inlet velocities: used by Patrick's InFlowBoundary
     double UIN{0.0};
     double VIN{0.0};
+    double TI{0.0};    /* initial temperature */
+    double alpha{0.0}; /* thermal diffusivity */
+    double beta{0.0};  /* thermal expansion coefficient */
 
     // R1: fail fast if the input file cannot be opened.
     if (!file.is_open()) {
@@ -103,7 +106,8 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 if (var == "UIN") file >> UIN;
                 if (var == "VIN") file >> VIN;
                 if (var == "energy_eq") {
-                    std::string s; file >> s;
+                    std::string s;
+                    file >> s;
                     _energy_eq = (s == "on");
                 }
                 // wall_temp_3 / wall_temp_4 / wall_temp_5 etc.
@@ -112,12 +116,19 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 // Dani can apply temperature BCs keyed by cell->wall_id().
                 if (var.size() > 10 && var.rfind("wall_temp_", 0) == 0) {
                     int wall_id = std::stoi(var.substr(10));
-                    double temp; file >> temp;
+                    double temp;
+                    file >> temp;
                     _wall_temperatures[wall_id] = temp;
                 }
                 // Both spellings appear across the provided .dat files; just consume the value.
-                if (var == "num_walls" || var == "num_of_walls") { int n; file >> n; }
+                if (var == "num_walls" || var == "num_of_walls") {
+                    int n;
+                    file >> n;
+                }
                 // → Dani: add TI, alpha, beta here
+                if (var == "TI") file >> TI;
+                if (var == "alpha") file >> alpha;
+                if (var == "beta") file >> beta;
             }
         }
     }
@@ -178,7 +189,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     build_domain(domain, imax, jmax);
 
     _grid = Grid(_geom_name, domain);
-    _field = Fields(nu, dt, tau, alpha, beta, l_grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
+    _field = Fields(nu, dt, tau, alpha, beta, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     if (solver == solver_type::SOR_MEAN_CORRECTION) {
@@ -202,10 +213,15 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
             std::make_unique<MovingWallBoundary>(_grid.moving_wall_cells(), LidDrivenCavity::wall_velocity));
     }
     if (not _grid.fixed_wall_cells().empty()) {
-        _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells()));
+        _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells(), _wall_temperatures));
     }
-    // → Patrick: construct InFlowBoundary for _grid.inflow_cells() using _UIN and _VIN
-    // → Patrick: construct OutFlowBoundary for _grid.outflow_cells()
+    if (not _grid.inflow_cells().empty()) {
+        _boundaries.push_back(std::make_unique<InFlowBoundary>(_grid.inflow_cells(), _UIN, _VIN));
+    }
+    if (not _grid.outflow_cells().empty()) {
+        _boundaries.push_back(std::make_unique<OutFlowBoundary>(_grid.outflow_cells()));
+    }
+
     // → Dani: _wall_temperatures is populated here; use it for temperature BCs
 }
 
@@ -263,7 +279,7 @@ void Case::set_file_names(std::string file_name) {
  *
  * For information about the classes and functions, you can check the header files.
  */
-void Case::simulate() {    // Inialize variables
+void Case::simulate() { // Inialize variables
     double t = 0.0;
     double dt = _field.dt();
     int timestep = 0;
@@ -297,10 +313,9 @@ void Case::simulate() {    // Inialize variables
     else
         std::cout << "  dt      : FIXED = " << std::setprecision(6) << dt << "   (adaptive disabled — tau <= 0)\n";
 
-    std::cout << "  Solver  : " << std::left << std::setw(10) << _solver_name
-              << "  omega=" << std::fixed << std::setprecision(2) << _omg
-              << "   itermax=" << _max_iter
-              << "   eps=" << std::scientific << std::setprecision(2) << _tolerance << "\n"
+    std::cout << "  Solver  : " << std::left << std::setw(10) << _solver_name << "  omega=" << std::fixed
+              << std::setprecision(2) << _omg << "   itermax=" << _max_iter << "   eps=" << std::scientific
+              << std::setprecision(2) << _tolerance << "\n"
               << "  Output  : " << _dict_name << "/\n"
               << "------------------------------------------------------------\n"
               << std::flush;
@@ -464,7 +479,7 @@ void Case::output_vtk(int timestep, int my_rank) {
             vel[0] = (_field.u(i - 1, j) + _field.u(i, j)) * 0.5;
             vel[1] = (_field.v(i, j - 1) + _field.v(i, j)) * 0.5;
             Velocity->InsertNextTuple(vel.data());
-            double temp = _field.t(i, j);        
+            double temp = _field.t(i, j);
             Temperature->InsertNextTuple(&temp);
         }
     }
@@ -473,7 +488,6 @@ void Case::output_vtk(int timestep, int my_rank) {
     vtkSmartPointer<vtkDoubleArray> VelocityPoints = vtkSmartPointer<vtkDoubleArray>::New();
     VelocityPoints->SetName("velocity");
     VelocityPoints->SetNumberOfComponents(3);
-
 
     // Print Velocity from bottom to top
     for (int j = 0; j < _grid.domain().size_y + 1; j++) {
@@ -503,11 +517,21 @@ void Case::output_vtk(int timestep, int my_rank) {
         for (int i = 1; i < _grid.domain().size_x + 1; i++) {
             int flag = 0;
             switch (_grid.cells()(i, j).type()) {
-                case cell_type::FIXED_WALL:  flag = 1; break;
-                case cell_type::MOVING_WALL: flag = 2; break;
-                case cell_type::INFLOW:      flag = 3; break;
-                case cell_type::OUTFLOW:     flag = 4; break;
-                default:                     flag = 0; break;
+            case cell_type::FIXED_WALL:
+                flag = 1;
+                break;
+            case cell_type::MOVING_WALL:
+                flag = 2;
+                break;
+            case cell_type::INFLOW:
+                flag = 3;
+                break;
+            case cell_type::OUTFLOW:
+                flag = 4;
+                break;
+            default:
+                flag = 0;
+                break;
             }
             Obstacle->InsertNextValue(flag);
         }

@@ -6,10 +6,11 @@
 // THOMAS IMPLEMENTATION OF 'PressureSolver.cpp'
 SOR_Mean_Correction::SOR_Mean_Correction(double omega) : _omega(omega) {}
 
-double SOR_Mean_Correction::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
+double SOR_Mean_Correction::solve(Fields &field, Grid &grid,
+                                  const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
 
-    double dx    = grid.dx();
-    double dy    = grid.dy();
+    double dx = grid.dx();
+    double dy = grid.dy();
     double coeff = _omega / (2.0 * (1.0 / (dx * dx) + 1.0 / (dy * dy))); // = ω·h²/4 when dx==dy==h
 
     // ── SOR sweep ────────────────────────────────────────────────────────────────
@@ -31,9 +32,11 @@ double SOR_Mean_Correction::solve(Fields &field, Grid &grid, const std::vector<s
     const std::size_t N = cells.size();
     if (N > 0) {
         double p_sum = 0.0;
-        for (auto cell : cells) p_sum += field.p(cell->i(), cell->j());
+        for (auto cell : cells)
+            p_sum += field.p(cell->i(), cell->j());
         const double p_mean = p_sum / static_cast<double>(N);
-        for (auto cell : cells) field.p(cell->i(), cell->j()) -= p_mean;
+        for (auto cell : cells)
+            field.p(cell->i(), cell->j()) -= p_mean;
     }
 
     // ── Residual (L2 norm on the zero-mean field) ─────────────────────────────────
@@ -57,7 +60,7 @@ double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::uni
 
     // Pre-computed coefficient for the update formula
     double coeff = _omega / (2.0 * (1.0 / (dx * dx) + 1.0 / (dy * dy))); // = _omega * h^2 / 4.0, if dx == dy == h
-    
+
     // Iteration of the SOR going from it to it+1
     // Loop over all fluid cells to compute p(i,j) at it+1 from it values
     for (auto currentCell : grid.fluid_cells()) {
@@ -68,8 +71,8 @@ double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::uni
                         coeff * (Discretization::sor_helper(field.p_matrix(), i, j) - field.rs(i, j));
     }
 
-    double res = 0.0;   // residual initialization
-    double rloc = 0.0;  // accumulates val^2 for every cell
+    double res = 0.0;  // residual initialization
+    double rloc = 0.0; // accumulates val^2 for every cell
 
     // Cummulative sum of squared residuals (Laplacian(p(i,j)) - rhs(i,j))^2 over all cells
     for (auto currentCell : grid.fluid_cells()) {
@@ -80,8 +83,8 @@ double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::uni
         rloc += (val * val);
     }
     {
-        res = rloc / (grid.fluid_cells().size()); // mean of squared residuals
-        res = std::sqrt(res);                     // L2 norm of the residual
+        res = rloc / static_cast<double>(grid.fluid_cells().size()); // mean of squared residuals
+        res = std::sqrt(res);                                        // L2 norm of the residual
     }
 
     return res;
@@ -92,8 +95,8 @@ SOR_RB::SOR_RB(double omega) : _omega(omega) {}
 
 double SOR_RB::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
 
-    double dx    = grid.dx();
-    double dy    = grid.dy();
+    double dx = grid.dx();
+    double dy = grid.dy();
     double coeff = _omega / (2.0 * (1.0 / (dx * dx) + 1.0 / (dy * dy)));
 
     // ── Red-Black sweep ───────────────────────────────────────────────────────────
@@ -118,9 +121,11 @@ double SOR_RB::solve(Fields &field, Grid &grid, const std::vector<std::unique_pt
     const std::size_t N = cells.size();
     if (N > 0) {
         double p_sum = 0.0;
-        for (auto cell : cells) p_sum += field.p(cell->i(), cell->j());
+        for (auto cell : cells)
+            p_sum += field.p(cell->i(), cell->j());
         const double p_mean = p_sum / static_cast<double>(N);
-        for (auto cell : cells) field.p(cell->i(), cell->j()) -= p_mean;
+        for (auto cell : cells)
+            field.p(cell->i(), cell->j()) -= p_mean;
     }
 
     // ── Residual (L2 norm) ────────────────────────────────────────────────────────
@@ -133,4 +138,3 @@ double SOR_RB::solve(Fields &field, Grid &grid, const std::vector<std::unique_pt
     }
     return std::sqrt(rloc / static_cast<double>(N > 0 ? N : 1));
 }
-
