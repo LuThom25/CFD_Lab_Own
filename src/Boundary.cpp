@@ -127,7 +127,8 @@ void MovingWallBoundary::applyVelocityTop(Fields &field, int i, int j) {
     // Shared v-face at the top wall: v(i,j) = 0 (no penetration)
     field.v(i, j) = 0.0;
     // Ghost u: (u(i,j) + u(i,j+1))/2 = 0  =>  u(i,j) = -u(i,j+1)
-    field.u(i, j) = -field.u(i, j + 1);
+    double U_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    field.u(i, j) = 2.0 * U_wall - field.u(i, j + 1);
 }
 
 void MovingWallBoundary::applyVelocityBottom(Fields &field, int i, int j) {
@@ -142,14 +143,16 @@ void MovingWallBoundary::applyVelocityLeft(Fields &field, int i, int j) {
     // Shared u-face at the left wall: u(i-1,j) = 0 (no penetration)
     field.u(i - 1, j) = 0.0;
     // Ghost v: (v(i,j) + v(i-1,j))/2 = 0  =>  v(i,j) = -v(i-1,j)
-    field.v(i, j) = -field.v(i - 1, j);
+    double V_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    field.v(i, j) = 2.0 * V_wall - field.v(i - 1, j);
 }
 
 void MovingWallBoundary::applyVelocityRight(Fields &field, int i, int j) {
     // Shared u-face at the right wall: u(i,j) = 0 (no penetration)
     field.u(i, j) = 0.0;
     // Ghost v: (v(i,j) + v(i+1,j))/2 = 0  =>  v(i,j) = -v(i+1,j)
-    field.v(i, j) = -field.v(i + 1, j);
+    double V_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    field.v(i, j) = 2.0 * V_wall - field.v(i + 1, j);
 }
 
 void MovingWallBoundary::applyPressureTop(Fields &field, int i, int j) {
@@ -229,10 +232,10 @@ void OutFlowBoundary::applyVelocityRight(Fields &field, int i, int j) {
     field.v(i, j) = 0.0;
 }
 
-void OutFlowBoundary::applyPressureTop(Fields &field, int i, int j) { field.p(i, j) = field.p(i, j + 1); }
+void OutFlowBoundary::applyPressureTop(Fields &field, int i, int j) { field.p(i, j) = 0.0; }
 
-void OutFlowBoundary::applyPressureBottom(Fields &field, int i, int j) { field.p(i, j) = field.p(i, j - 1); }
+void OutFlowBoundary::applyPressureBottom(Fields &field, int i, int j) { field.p(i, j) = 0.0; }
 
-void OutFlowBoundary::applyPressureLeft(Fields &field, int i, int j) { field.p(i, j) = field.p(i - 1, j); }
+void OutFlowBoundary::applyPressureLeft(Fields &field, int i, int j) { field.p(i, j) = 0.0; }
 
-void OutFlowBoundary::applyPressureRight(Fields &field, int i, int j) { field.p(i, j) = field.p(i + 1, j); }
+void OutFlowBoundary::applyPressureRight(Fields &field, int i, int j) { field.p(i, j) = 0.0; }
