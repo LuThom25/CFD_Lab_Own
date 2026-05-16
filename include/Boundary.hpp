@@ -19,10 +19,13 @@ class Boundary {
      */
     void applyVelocity(Fields &field);
 
-    virtual void applyVelocityTop(Fields &field, int i, int j) = 0;
-    virtual void applyVelocityBottom(Fields &field, int i, int j) = 0;
-    virtual void applyVelocityLeft(Fields &field, int i, int j) = 0;
-    virtual void applyVelocityRight(Fields &field, int i, int j) = 0;
+    /**
+     * @brief Method to patch the velocity boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyVelocityToCell(Fields &field, Cell *cell) = 0;
 
     /**
      * @brief Method to patch the pressure boundary conditions to the given field.
@@ -31,10 +34,13 @@ class Boundary {
      */
     void applyPressure(Fields &field);
 
-    virtual void applyPressureTop(Fields &field, int i, int j) = 0;
-    virtual void applyPressureBottom(Fields &field, int i, int j) = 0;
-    virtual void applyPressureLeft(Fields &field, int i, int j) = 0;
-    virtual void applyPressureRight(Fields &field, int i, int j) = 0;
+    /**
+     * @brief Method to patch the pressure boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyPressureToCell(Fields &field, Cell *cell) = 0;
 
     /**
      * @brief Method to patch the flux (F & G) boundary conditions to the given field.
@@ -43,14 +49,23 @@ class Boundary {
      */
     void applyFlux(Fields &field);
 
-    virtual void applyFluxTop(Fields &, int, int) {};
-    virtual void applyFluxBottom(Fields &, int, int) {};
-    virtual void applyFluxLeft(Fields &, int, int) {};
-    virtual void applyFluxRight(Fields &, int, int) {};
+    /**
+     * @brief Method to patch the flux (F & G) boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyFluxToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell) {};
 
+    /**
+     * @brief Virtual destructor for the boundary class.
+     */
     virtual ~Boundary() = default;
 
   protected:
+    /**
+     * @brief Constructor for the boundary class.
+     */
     Boundary(std::vector<Cell *> cells);
     std::vector<Cell *> _cells;
 };
@@ -65,20 +80,9 @@ class FixedWallBoundary : public Boundary {
     FixedWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_temperature);
     ~FixedWallBoundary() = default;
 
-    void applyVelocityTop(Fields &field, int i, int j) override;
-    void applyVelocityBottom(Fields &field, int i, int j) override;
-    void applyVelocityLeft(Fields &field, int i, int j) override;
-    void applyVelocityRight(Fields &field, int i, int j) override;
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
 
-    void applyPressureTop(Fields &field, int i, int j) override;
-    void applyPressureBottom(Fields &field, int i, int j) override;
-    void applyPressureLeft(Fields &field, int i, int j) override;
-    void applyPressureRight(Fields &field, int i, int j) override;
-
-    void applyFluxTop(Fields &field, int i, int j) override;
-    void applyFluxBottom(Fields &field, int i, int j) override;
-    void applyFluxLeft(Fields &field, int i, int j) override;
-    void applyFluxRight(Fields &field, int i, int j) override;
+    void applyPressureToCell(Fields &field, Cell *cell) override;
 
   private:
     std::map<int, double> _wall_temperature;
@@ -96,15 +100,9 @@ class MovingWallBoundary : public Boundary {
                        std::map<int, double> wall_temperature);
     ~MovingWallBoundary() = default;
 
-    void applyVelocityTop(Fields &field, int i, int j) override;
-    void applyVelocityBottom(Fields &field, int i, int j) override;
-    void applyVelocityLeft(Fields &field, int i, int j) override;
-    void applyVelocityRight(Fields &field, int i, int j) override;
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
 
-    void applyPressureTop(Fields &field, int i, int j) override;
-    void applyPressureBottom(Fields &field, int i, int j) override;
-    void applyPressureLeft(Fields &field, int i, int j) override;
-    void applyPressureRight(Fields &field, int i, int j) override;
+    void applyPressureToCell(Fields &field, Cell *cell) override;
 
   private:
     std::map<int, double> _wall_velocity;
@@ -120,17 +118,25 @@ class InFlowBoundary : public Boundary {
     InFlowBoundary(std::vector<Cell *> cells, double u_in, double v_in);
     ~InFlowBoundary() = default;
 
-    void applyVelocityTop(Fields &field, int i, int j) override;
-    void applyVelocityBottom(Fields &field, int i, int j) override;
-    void applyVelocityLeft(Fields &field, int i, int j) override;
-    void applyVelocityRight(Fields &field, int i, int j) override;
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
 
-    void applyPressureTop(Fields &field, int i, int j) override;
-    void applyPressureBottom(Fields &field, int i, int j) override;
-    void applyPressureLeft(Fields &field, int i, int j) override;
-    void applyPressureRight(Fields &field, int i, int j) override;
+    void applyPressureToCell(Fields &field, Cell *cell) override;
 
   private:
     double _u_in;
     double _v_in;
+};
+
+/**
+ * @brief Outflow boundary condition for the outer boundaries of the domain.
+ * Neumann for velocities, Dirichlet(0) for pressure
+ */
+class OutFlowBoundary : public Boundary {
+  public:
+    OutFlowBoundary(std::vector<Cell *> cells);
+    ~OutFlowBoundary() = default;
+
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
+
+    void applyPressureToCell(Fields &field, Cell *cell) override;
 };
