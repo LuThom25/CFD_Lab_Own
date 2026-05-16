@@ -407,11 +407,10 @@ void Case::simulate() { // Inialize variables
               << "  avg_dt=" << std::scientific << std::setprecision(2) << avg_dt << "\n\n";
 
     // One-line machine-readable summary (parsed by run_studies.py)
-    std::cout << "SUMMARY"
-              << " t=" << std::fixed << std::setprecision(3) << t << " steps=" << timestep << " vtk=" << vtk_count
-              << " avg_sor=" << std::fixed << std::setprecision(1) << avg_sor << " max_sor=" << max_sor_iter
-              << " avg_res=" << std::scientific << std::setprecision(2) << avg_res << " avg_dt=" << std::scientific
-              << std::setprecision(2) << avg_dt << " solver=" << _solver_name
+    std::cout << "SUMMARY" << " t=" << std::fixed << std::setprecision(3) << t << " steps=" << timestep
+              << " vtk=" << vtk_count << " avg_sor=" << std::fixed << std::setprecision(1) << avg_sor
+              << " max_sor=" << max_sor_iter << " avg_res=" << std::scientific << std::setprecision(2) << avg_res
+              << " avg_dt=" << std::scientific << std::setprecision(2) << avg_dt << " solver=" << _solver_name
               << " status=" << (diverged ? "DIVERGED" : "OK") << "\n";
 }
 
@@ -428,19 +427,13 @@ void Case::output_vtk(int timestep, int my_rank) {
     double x = _grid.domain().iminb * dx;
     double y = _grid.domain().jminb * dy;
 
-    {
-        y += dy;
-    }
-    {
-        x += dx;
-    }
+    { y += dy; }
+    { x += dx; }
 
     double z = 0;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
         x = _grid.domain().iminb * dx;
-        {
-            x += dx;
-        }
+        { x += dx; }
         for (int row = 0; row < _grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
             x += dx;

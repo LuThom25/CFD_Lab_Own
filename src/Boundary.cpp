@@ -178,6 +178,23 @@ void InFlowBoundary::applyPressureToCell(Fields &field, Cell *cell) {
     }
 }
 
+void InFlowBoundary::applyFluxToCell(Fields &field, Cell *cell) {
+    const int i = cell->i(), j = cell->j();
+
+    if (cell->is_border(border_position::TOP)) {
+        field.g(i, j) = _v_in;
+    }
+    if (cell->is_border(border_position::BOTTOM)) {
+        field.g(i, j - 1) = _v_in;
+    }
+    if (cell->is_border(border_position::LEFT)) {
+        field.f(i - 1, j) = _u_in;
+    }
+    if (cell->is_border(border_position::RIGHT)) {
+        field.f(i, j) = _u_in;
+    }
+}
+
 OutFlowBoundary::OutFlowBoundary(std::vector<Cell *> cells) : Boundary(cells) {}
 
 void OutFlowBoundary::applyVelocityToCell(Fields &field, Cell *cell) {

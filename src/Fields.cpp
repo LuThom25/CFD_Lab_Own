@@ -6,7 +6,8 @@
 #include "Communication.hpp"
 #include "Fields.hpp"
 
-Fields::Fields(double nu, double dt, double tau, double alpha, double beta, int imax, int jmax, double UI, double VI, double PI, double TI)
+Fields::Fields(double nu, double dt, double tau, double alpha, double beta, int imax, int jmax, double UI, double VI,
+               double PI, double TI)
     : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta) {
     _U = Matrix<double>(imax + 2, jmax + 2, UI);
     _V = Matrix<double>(imax + 2, jmax + 2, VI);
@@ -27,15 +28,14 @@ void Fields::calculate_fluxes(Grid &grid) {
         int j = cell->j();
 
         // Eq. 9: F(i,j) = U + dt * (nu * laplacian(U) - convection_u)
-        _F(i, j) = _U(i, j) + _dt * (_nu * Discretization::laplacian(_U, i, j)
-            - Discretization::convection_u(_U, _V, i, j))
-            -  _beta * 0.5 * _dt * (_T(i,j) + _T(i+1, j)) * _gx;
-        
+        _F(i, j) = _U(i, j) +
+                   _dt * (_nu * Discretization::laplacian(_U, i, j) - Discretization::convection_u(_U, _V, i, j)) -
+                   _beta * 0.5 * _dt * (_T(i, j) + _T(i + 1, j)) * _gx;
 
         // Eq. 10: G(i,j) = V + dt * (nu * laplacian(V) - convection_v)
-        _G(i, j) = _V(i, j) + _dt * (_nu * Discretization::laplacian(_V, i, j)
-            - Discretization::convection_v(_U, _V, i, j)) 
-            - _beta * 0.5 * _dt * (_T(i,j) + _T(i+1, j)) * _gy;
+        _G(i, j) = _V(i, j) +
+                   _dt * (_nu * Discretization::laplacian(_V, i, j) - Discretization::convection_v(_U, _V, i, j)) -
+                   _beta * 0.5 * _dt * (_T(i, j) + _T(i + 1, j)) * _gy;
     }
 }
 
@@ -46,10 +46,7 @@ void Fields::calculate_rs(Grid &grid) {
         int i = cell->i();
         int j = cell->j();
 
-        _RS(i, j) = (1.0 / _dt) * (
-            (_F(i, j) - _F(i - 1, j)) / grid.dx()
-          + (_G(i, j) - _G(i, j - 1)) / grid.dy()
-        );
+        _RS(i, j) = (1.0 / _dt) * ((_F(i, j) - _F(i - 1, j)) / grid.dx() + (_G(i, j) - _G(i, j - 1)) / grid.dy());
     }
 
     // Fredholm compatibility condition: for the all-Neumann Poisson system (singular)
@@ -59,9 +56,11 @@ void Fields::calculate_rs(Grid &grid) {
     const size_t N = cells.size();
     if (N == 0) return;
     double sum = 0.0;
-    for (auto cell : cells) sum += _RS(cell->i(), cell->j());
+    for (auto cell : cells)
+        sum += _RS(cell->i(), cell->j());
     const double mean = sum / static_cast<double>(N);
-    for (auto cell : cells) _RS(cell->i(), cell->j()) -= mean;
+    for (auto cell : cells)
+        _RS(cell->i(), cell->j()) -= mean;
 }
 
 void Fields::calculate_velocities(Grid &grid) {
@@ -89,12 +88,12 @@ void Fields::calculate_temperature(Grid &grid) {
         double convectionT = Discretization::convection_T(_T, _U, _V, i, j);
         double laplacianT = Discretization::laplacian(_T, i, j);
 
-        T_next(i,j) = _T(i,j) + _dt * (_alpha * laplacianT - convectionT);
+        T_next(i, j) = _T(i, j) + _dt * (_alpha * laplacianT - convectionT);
     }
     // apply boundary conditions
 
     // update T
-    _T = T_next; //Assignment operator
+    _T = T_next; // Assignment operator
 }
 double Fields::calculate_dt(Grid &grid) {
     // Implementing Eqs. 12 & 13: adaptive time step control based on three stability criteria.

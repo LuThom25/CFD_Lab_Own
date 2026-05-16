@@ -51,7 +51,9 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     int j = 0;
 
     for (int j_geom = _domain.jminb; j_geom < _domain.jmaxb; ++j_geom) {
-        { i = 0; }
+        {
+            i = 0;
+        }
         for (int i_geom = _domain.iminb; i_geom < _domain.imaxb; ++i_geom) {
             const int id = geometry_data.at(i_geom).at(j_geom);
             if (id == 0) {
@@ -256,8 +258,7 @@ void Grid::parse_geometry_file(std::string filedoc, std::vector<std::vector<int>
     for (int y = num_cells_in_y - 1; y > -1; --y) {
         for (int x = 0; x < num_cells_in_x; ++x) {
             if (!(ss >> geometry_data[x][y])) {
-                std::cerr << "Error: unexpected end of geometry file at pixel ("
-                          << x << ", " << y << "). "
+                std::cerr << "Error: unexpected end of geometry file at pixel (" << x << ", " << y << "). "
                           << "Check that the PGM dimensions match the grid size.\n";
                 infile.close();
                 return;
@@ -285,7 +286,7 @@ const std::vector<Cell *> &Grid::fixed_wall_cells() const { return _fixed_wall_c
 
 const std::vector<Cell *> &Grid::moving_wall_cells() const { return _moving_wall_cells; }
 
-const std::vector<Cell *> &Grid::inflow_cells()  const { return _inflow_cells; }
+const std::vector<Cell *> &Grid::inflow_cells() const { return _inflow_cells; }
 
 const std::vector<Cell *> &Grid::outflow_cells() const { return _outflow_cells; }
 

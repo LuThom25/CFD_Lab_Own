@@ -17,7 +17,7 @@
 
 #define NOTHROW [[gnu::nothrow]]
 #else
-#define HOT /* no-op */
-#define INLINE /* no-op */
+#define HOT     /* no-op */
+#define INLINE  /* no-op */
 #define NOTHROW /* no-op */
 #endif
