@@ -122,6 +122,8 @@ class InFlowBoundary : public Boundary {
 
     void applyPressureToCell(Fields &field, Cell *cell) override;
 
+    void applyFluxToCell(Fields &field, Cell *cell) override;
+
   private:
     double _u_in;
     double _v_in;
@@ -139,4 +141,6 @@ class OutFlowBoundary : public Boundary {
     void applyVelocityToCell(Fields &field, Cell *cell) override;
 
     void applyPressureToCell(Fields &field, Cell *cell) override;
+
+    void applyFluxToCell(Fields &field, Cell *cell) override;
 };

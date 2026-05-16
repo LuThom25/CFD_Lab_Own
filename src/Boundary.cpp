@@ -86,30 +86,22 @@ void MovingWallBoundary::applyVelocityToCell(Fields &field, Cell *cell) {
     const int i = cell->i(), j = cell->j();
 
     if (cell->is_border(border_position::TOP)) {
-        // Shared v-face at the top wall: v(i,j) = 0 (no penetration)
         field.v(i, j) = 0.0;
-        // Ghost u: (u(i,j) + u(i,j+1))/2 = 0  =>  u(i,j) = -u(i,j+1)
         double U_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
         field.u(i, j) = 2.0 * U_wall - field.u(i, j + 1);
     }
     if (cell->is_border(border_position::BOTTOM)) {
-        // Shared v-face at the top wall: v(i, j-1) = 0 (no penetration)
         field.v(i, j - 1) = 0.0;
-        // Ghost u: (u(i,j) + u(i,j-1))/2 = U_wall  =>  u(i,j) = 2*U_wall - u(i,j-1)
         double U_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
         field.u(i, j) = 2.0 * U_wall - field.u(i, j - 1);
     }
     if (cell->is_border(border_position::LEFT)) {
-        // Shared u-face at the left wall: u(i-1,j) = 0 (no penetration)
         field.u(i - 1, j) = 0.0;
-        // Ghost v: (v(i,j) + v(i-1,j))/2 = 0  =>  v(i,j) = -v(i-1,j)
         double V_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
         field.v(i, j) = 2.0 * V_wall - field.v(i - 1, j);
     }
     if (cell->is_border(border_position::RIGHT)) {
-        // Shared u-face at the right wall: u(i,j) = 0 (no penetration)
         field.u(i, j) = 0.0;
-        // Ghost v: (v(i,j) + v(i+1,j))/2 = 0  =>  v(i,j) = -v(i+1,j)
         double V_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
         field.v(i, j) = 2.0 * V_wall - field.v(i + 1, j);
     }
@@ -168,7 +160,7 @@ void InFlowBoundary::applyVelocityToCell(Fields &field, Cell *cell) {
 }
 
 void InFlowBoundary::applyPressureToCell(Fields &field, Cell *cell) {
-    // THis code does not support inflow cells with more than one border, but this is not expected to happen in the
+    // This code does not support inflow cells with more than one border, but this is not expected to happen in the
     // current test cases
     const int i = cell->i(), j = cell->j();
 
@@ -192,20 +184,20 @@ void OutFlowBoundary::applyVelocityToCell(Fields &field, Cell *cell) {
     const int i = cell->i(), j = cell->j();
 
     if (cell->is_border(border_position::TOP)) {
-        field.u(i, j) = 0.0;
+        field.u(i, j) = field.u(i, j + 1);
         field.v(i, j) = field.v(i, j + 1);
     }
     if (cell->is_border(border_position::BOTTOM)) {
-        field.u(i, j) = 0.0;
-        field.v(i, j - 1) = field.v(i, j - 1);
+        field.u(i, j) = field.u(i, j - 1);
+        field.v(i, j - 1) = field.v(i, j - 2);
     }
     if (cell->is_border(border_position::LEFT)) {
-        field.u(i - 1, j) = field.u(i - 1, j);
-        field.v(i, j) = 0.0;
+        field.u(i - 1, j) = field.u(i - 2, j);
+        field.v(i, j) = field.v(i - 1, j);
     }
     if (cell->is_border(border_position::RIGHT)) {
         field.u(i, j) = field.u(i + 1, j);
-        field.v(i, j) = 0.0;
+        field.v(i, j) = field.v(i + 1, j);
     }
 }
 
@@ -213,4 +205,21 @@ void OutFlowBoundary::applyPressureToCell(Fields &field, Cell *cell) {
     const int i = cell->i(), j = cell->j();
 
     field.p(i, j) = 0.0;
+}
+
+void OutFlowBoundary::applyFluxToCell(Fields &field, Cell *cell) {
+    const int i = cell->i(), j = cell->j();
+
+    if (cell->is_border(border_position::TOP)) {
+        field.g(i, j) = field.v(i, j);
+    }
+    if (cell->is_border(border_position::BOTTOM)) {
+        field.g(i, j - 1) = field.v(i, j - 1);
+    }
+    if (cell->is_border(border_position::LEFT)) {
+        field.f(i - 1, j) = field.u(i - 1, j);
+    }
+    if (cell->is_border(border_position::RIGHT)) {
+        field.f(i, j) = field.u(i, j);
+    }
 }
