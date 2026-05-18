@@ -151,9 +151,7 @@ void FixedWallBoundary::applyPressureRight(Fields &field, int i, int j) {
     field.p(i, j) = field.p(i + 1, j);
 }
 
-void FixedWallBoundary::applyTemperature(Fields &field) {
-    apply_wall_temperature(field, _cells, _wall_temperature);
-}
+void FixedWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature(field, _cells, _wall_temperature); }
 
 void FixedWallBoundary::applyFluxTop(Fields &field, int i, int j) {
     field.f(i, j) = field.u(i, j);

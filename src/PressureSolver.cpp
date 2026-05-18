@@ -3,7 +3,6 @@
 #include "Communication.hpp"
 #include "PressureSolver.hpp"
 
-
 SOR_Standard::SOR_Standard(double omega) : _omega(omega) {}
 
 double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
@@ -42,5 +41,3 @@ double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::uni
 
     return res;
 }
-
-

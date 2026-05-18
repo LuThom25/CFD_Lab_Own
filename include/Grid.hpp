@@ -84,7 +84,7 @@ class Grid {
 
     /**
      * @brief Access to all cells (including ghost cells)
-     * 
+     *
      * @param[out] matrix of all cells
      */
     Matrix<Cell> &cells();

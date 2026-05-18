@@ -26,24 +26,23 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    double nu{};                                          /* viscosity   */
-    double UI{};                                          /* velocity x-direction */
-    double VI{};                                          /* velocity y-direction */
-    double PI{};                                          /* pressure */
-    double GX{};                                          /* gravitation x-direction */
-    double GY{};                                          /* gravitation y-direction */
-    double xlength{};                                     /* length of the domain x-dir.*/
-    double ylength{};                                     /* length of the domain y-dir.*/
-    double dt{};                                          /* time step */
-    int imax{};                                           /* number of cells x-direction*/
-    int jmax{};                                           /* number of cells y-direction*/
-    double gamma{};                                       /* uppwind differencing factor*/
-    double omg{};                                         /* relaxation factor */
-    double tau{};                                         /* safety factor for time step*/
-    int itermax{};                                        /* max. number of iterations for pressure per time step */
-    double eps{};                                         /* accuracy bound for pressure*/
-    solver_type solver{solver_type::SOR_MEAN_CORRECTION}; /* type of solver */
-    // WS2 inlet velocities: used by Patrick's InFlowBoundary
+    double nu{};      /* viscosity   */
+    double UI{};      /* velocity x-direction */
+    double VI{};      /* velocity y-direction */
+    double PI{};      /* pressure */
+    double GX{};      /* gravitation x-direction */
+    double GY{};      /* gravitation y-direction */
+    double xlength{}; /* length of the domain x-dir.*/
+    double ylength{}; /* length of the domain y-dir.*/
+    double dt{};      /* time step */
+    int imax{};       /* number of cells x-direction*/
+    int jmax{};       /* number of cells y-direction*/
+    double gamma{};   /* uppwind differencing factor*/
+    double omg{};     /* relaxation factor */
+    double tau{};     /* safety factor for time step*/
+    int itermax{};    /* max. number of iterations for pressure per time step */
+    double eps{};     /* accuracy bound for pressure*/
+    // WS2 inlet velocities: used by the InFlowBoundary
     double UIN{0.0};
     double VIN{0.0};
     double TI{0.0};    /* initial temperature */
@@ -51,7 +50,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     double beta{0.0};  /* thermal expansion coefficient */
 
     if (file.is_open()) {
- 
+
         std::string var;
         while (!file.eof() && file.good()) {
             file >> var;
@@ -77,7 +76,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 if (var == "imax") file >> imax;
                 if (var == "jmax") file >> jmax;
 
-                /* WS2 parameters 
+                /* WS2 parameters
                  *  Geometry file: read directly into _geom_name so set_file_names() can
                  *  prepend the directory prefix. If absent, _geom_name stays "NONE" and
                  *  the hardcoded lid-driven cavity fallback is used.
@@ -146,11 +145,10 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     _nu = nu;
     _omg = omg;
 
-    // Construct boundaries 
+    // Construct boundaries
     if (not _grid.moving_wall_cells().empty()) {
         _boundaries.push_back(std::make_unique<MovingWallBoundary>(_grid.moving_wall_cells(),
-                                                                   LidDrivenCavity::wall_velocity,
-                                                                   _wall_temperatures));
+                                                                   LidDrivenCavity::wall_velocity, _wall_temperatures));
     }
     if (not _grid.fixed_wall_cells().empty()) {
         _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells(), _wall_temperatures));
@@ -227,9 +225,7 @@ void Case::simulate() { // Inialize variables
     int vtk_count = 0;
     double output_counter = 0.0;
 
-    bool diverged = false; // Boolean to check for divergence
-
-    // Initial state 
+    // Initial state
     if (_energy_eq) {
         for (auto &boundary : _boundaries)
             boundary->applyTemperature(_field);
@@ -237,7 +233,7 @@ void Case::simulate() { // Inialize variables
     output_vtk(timestep);
     vtk_count++;
 
-    // Loop over time 
+    // Loop over time
     while (t < _t_end) {
 
         // Step 1: Velocity BCs (ghost cells, moving lid)
@@ -256,12 +252,12 @@ void Case::simulate() { // Inialize variables
         for (auto &boundary : _boundaries)
             boundary->applyFlux(_field);
 
-        // Step 4: Calculate the RHS of pressure Poisson equation 
+        // Step 4: Calculate the RHS of pressure Poisson equation
         _field.calculate_rs(_grid);
 
         // Step 5: SOR pressure solve: iterate until res < eps or itermax reached
         // Initialize SOR stopping criteria
-        int iter = 0;               
+        int iter = 0;
         double residual = std::numeric_limits<double>::max();
         // Call SOR solve outputting the residual after solving the PPE
         while (iter < _max_iter && residual > _tolerance) {
@@ -272,19 +268,18 @@ void Case::simulate() { // Inialize variables
             ++iter;
         }
 
-        // Divergence check:
+        // Divergence check
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
             ++timestep; // count this step so avg_sor = total_iter / total_steps is bounded by itermax
             std::cout << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t << "  step=" << timestep
                       << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n";
-            diverged = true;
             break;
         }
 
-        // Step 6: Correct velocities using updated pressure 
+        // Step 6: Correct velocities using updated pressure
         _field.calculate_velocities(_grid);
 
-        // Step 7: Compute adaptive dt for the next timestep 
+        // Step 7: Compute adaptive dt for the next timestep
         dt = _field.calculate_dt(_grid);
 
         // Update time, timestep and counter
@@ -292,7 +287,7 @@ void Case::simulate() { // Inialize variables
         ++timestep;
         output_counter += dt;
 
-        // Step 8: VTK output 
+        // Step 8: VTK output
         // only output when enough simulated time has passed to avoid having thousands of ouput vtk
         if (output_counter >= _output_freq) {
             output_vtk(timestep);
@@ -315,19 +310,13 @@ void Case::output_vtk(int timestep, int my_rank) {
     double x = _grid.domain().iminb * dx;
     double y = _grid.domain().jminb * dy;
 
-    {
-        y += dy;
-    }
-    {
-        x += dx;
-    }
+    { y += dy; }
+    { x += dx; }
 
     double z = 0;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
         x = _grid.domain().iminb * dx;
-        {
-            x += dx;
-        }
+        { x += dx; }
         for (int row = 0; row < _grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
             x += dx;
@@ -393,7 +382,7 @@ void Case::output_vtk(int timestep, int my_rank) {
     structuredGrid->GetPointData()->AddArray(VelocityPoints);
     structuredGrid->GetCellData()->AddArray(Temperature);
 
-    /* Geometry / obstacle field 
+    /* Geometry / obstacle field
      *  Encode cell type as an integer per cell so ParaView can colour obstacles without
      *  needing a separate geometry file. Domain boundary ghost cells are omitted (loop
      *  starts at 1), matching the same range used for Pressure and Velocity above.
