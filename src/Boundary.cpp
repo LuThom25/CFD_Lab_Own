@@ -108,9 +108,7 @@ void FixedWallBoundary::applyPressureToCell(Fields &field, Cell *cell) {
     field.p(i, j) = pressure * count_inv[count - 1];
 }
 
-void FixedWallBoundary::applyTemperature(Fields &field) {
-    apply_wall_temperature(field, _cells, _wall_temperature);
-}
+void FixedWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature(field, _cells, _wall_temperature); }
 
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : Boundary(cells) {
     _wall_velocity.insert(std::pair(LidDrivenCavity::moving_wall_id, wall_velocity));
@@ -179,9 +177,7 @@ void MovingWallBoundary::applyPressureToCell(Fields &field, Cell *cell) {
     field.p(i, j) = pressure * count_inv[count - 1];
 }
 
-void MovingWallBoundary::applyTemperature(Fields &field) {
-    apply_wall_temperature(field, _cells, _wall_temperature);
-}
+void MovingWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature(field, _cells, _wall_temperature); }
 
 InFlowBoundary::InFlowBoundary(std::vector<Cell *> cells, double u_in, double v_in)
     : Boundary(cells), _u_in(u_in), _v_in(v_in) {}

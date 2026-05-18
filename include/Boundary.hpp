@@ -89,7 +89,7 @@ class FixedWallBoundary : public Boundary {
     ~FixedWallBoundary() = default;
 
     void applyVelocityToCell(Fields &field, Cell *cell) override;
-    
+
     void applyPressureToCell(Fields &field, Cell *cell) override;
 
     void applyTemperature(Fields &field) override;
