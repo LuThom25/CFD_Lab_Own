@@ -1,7 +1,6 @@
 #include "Boundary.hpp"
 
-namespace {
-constexpr double ADIABATIC_WALL_TEMPERATURE = -1.0;
+inline constexpr double ADIABATIC_WALL_TEMPERATURE = -1.0;
 
 double ghost_temperature(double wall_temperature, double fluid_temperature) {
     if (wall_temperature == ADIABATIC_WALL_TEMPERATURE) return fluid_temperature;
@@ -32,7 +31,6 @@ void apply_wall_temperature(Fields &field, const std::vector<Cell *> &cells,
         }
     }
 }
-} // namespace
 
 Boundary::Boundary(std::vector<Cell *> cells) : _cells(cells) {}
 
@@ -53,6 +51,8 @@ void Boundary::applyFlux(Fields &field) {
         applyFluxToCell(field, cell);
     }
 }
+
+void Boundary::applyTemperature(Fields & /*field*/) {}
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : Boundary(cells) {}
 
@@ -106,6 +106,10 @@ void FixedWallBoundary::applyPressureToCell(Fields &field, Cell *cell) {
         count++;
     }
     field.p(i, j) = pressure * count_inv[count - 1];
+}
+
+void FixedWallBoundary::applyTemperature(Fields &field) {
+    apply_wall_temperature(field, _cells, _wall_temperature);
 }
 
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : Boundary(cells) {
@@ -173,6 +177,10 @@ void MovingWallBoundary::applyPressureToCell(Fields &field, Cell *cell) {
         count++;
     }
     field.p(i, j) = pressure * count_inv[count - 1];
+}
+
+void MovingWallBoundary::applyTemperature(Fields &field) {
+    apply_wall_temperature(field, _cells, _wall_temperature);
 }
 
 InFlowBoundary::InFlowBoundary(std::vector<Cell *> cells, double u_in, double v_in)
