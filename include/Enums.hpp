@@ -26,9 +26,3 @@ enum class cell_type {
     OUTFLOW, // PGM value 2: Neumann velocity BC, Dirichlet pressure BC (p = 0)
     DEFAULT,
 };
-
-enum class solver_type {
-    SOR_MEAN_CORRECTION,
-    SOR_RB,
-    SOR_STANDARD,
-};

@@ -33,7 +33,7 @@ void Fields::calculate_fluxes(Grid &grid) {
         // G_tilda(i,j)
         _G(i, j) = _V(i, j) +
                    _dt * (_nu * Discretization::laplacian(_V, i, j) - Discretization::convection_v(_U, _V, i, j)) -
-                   _beta * _dt * Discretization::interpolate(_T, i, j, 0,  1) * _gy;
+                   _beta * _dt * Discretization::interpolate(_T, i, j, 0, 1) * _gy;
     }
 }
 
