@@ -1,6 +1,7 @@
 # Ignore build and cache directories
 /*build*/
 /*cache*/
+/*local*/
 
 # Ignore output files and logs
 *_Output
