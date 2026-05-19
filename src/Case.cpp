@@ -134,7 +134,6 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
 
     build_domain(domain, imax, jmax);
 
-    // I THINK I DONT UNDERSTAND WHAT IS DONE HERE.... MAYBE CLEAN THIS UP TOO
     _grid = Grid(_geom_name, domain);
     _field = Fields(nu, dt, tau, alpha, beta, GX, GY, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 

@@ -94,6 +94,8 @@ class FixedWallBoundary : public Boundary {
 
     void applyTemperature(Fields &field) override;
 
+    void applyFluxToCell(Fields &field, Cell *cell) override;
+
   private:
     std::map<int, double> _wall_temperature;
 };

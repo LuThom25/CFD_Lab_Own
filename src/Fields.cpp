@@ -20,28 +20,26 @@ Fields::Fields(double nu, double dt, double tau, double alpha, double beta, doub
 }
 
 void Fields::calculate_fluxes(Grid &grid) {
-    // Implementing Eq. 9 & 10: compute intermediate velocity fluxes F and G
-    // using explicit Euler time integration. F and G incorporate diffusion (Laplacian)
-    // and convection (donor-cell scheme) terms from the momentum equations.
+    // Computation of intermediate velocity fluxes F and G tilda
     for (auto cell : grid.fluid_cells()) {
         int i = cell->i();
         int j = cell->j();
 
-        // Eq. 9: F(i,j) = U + dt * (nu * laplacian(U) - convection_u)
+        // F_tilda(i,j)
         _F(i, j) = _U(i, j) +
                    _dt * (_nu * Discretization::laplacian(_U, i, j) - Discretization::convection_u(_U, _V, i, j)) -
-                   _beta * 0.5 * _dt * (_T(i, j) + _T(i + 1, j)) * _gx;
+                   _beta * _dt * Discretization::interpolate(_T, i, j, 1, 0) * _gx;
 
-        // Eq. 10: G(i,j) = V + dt * (nu * laplacian(V) - convection_v)
+        // G_tilda(i,j)
         _G(i, j) = _V(i, j) +
                    _dt * (_nu * Discretization::laplacian(_V, i, j) - Discretization::convection_v(_U, _V, i, j)) -
-                   _beta * 0.5 * _dt * (_T(i, j) + _T(i, j + 1)) * _gy;
+                   _beta * _dt * Discretization::interpolate(_T, i, j, 0,  1) * _gy;
     }
 }
 
 void Fields::calculate_rs(Grid &grid) {
-    // Implementing Eq. 11: compute the Right-Hand Side of the Pressure Poisson Equation (PPE)
-    // RS(i,j) = (1/dt) * [ (F(i,j) - F(i-1,j))/dx + (G(i,j) - G(i,j-1))/dy ]
+    // Computation of the Right-Hand Side of the Pressure Poisson Equation (PPE)
+    // RS(i,j) = (1/dt) * [ (F_tilda(i,j) - F_tilda(i-1,j))/dx + (G_tilda(i,j) - G_tilda(i,j-1))/dy ]
     for (auto cell : grid.fluid_cells()) {
         int i = cell->i();
         int j = cell->j();

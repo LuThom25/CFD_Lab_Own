@@ -110,6 +110,17 @@ void FixedWallBoundary::applyPressureToCell(Fields &field, Cell *cell) {
 
 void FixedWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature(field, _cells, _wall_temperature); }
 
+// For each wall cell, we make zero the flux at the face shared with a fluid neighbour.
+// Without this, the pressure solver uses leftover flux values from the previous
+// timestep at those faces, which causes wrong pressures and eventually divergence.
+void FixedWallBoundary::applyFluxToCell(Fields &field, Cell *cell) {
+    const int i = cell->i(), j = cell->j();
+    if (cell->is_border(border_position::TOP))    field.g(i, j)     = 0.0;
+    if (cell->is_border(border_position::BOTTOM)) field.g(i, j - 1) = 0.0;
+    if (cell->is_border(border_position::LEFT))   field.f(i - 1, j) = 0.0;
+    if (cell->is_border(border_position::RIGHT))  field.f(i, j)     = 0.0;
+}
+
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : Boundary(cells) {
     _wall_velocity.insert(std::pair(LidDrivenCavity::moving_wall_id, wall_velocity));
 }
