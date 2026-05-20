@@ -188,6 +188,14 @@ void MovingWallBoundary::applyPressureToCell(Fields &field, Cell *cell) {
     field.p(i, j) = pressure * count_inv[count - 1];
 }
 
+void MovingWallBoundary::applyFluxToCell(Fields &field, Cell *cell) {
+    const int i = cell->i(), j = cell->j();
+    if (cell->is_border(border_position::TOP)) field.g(i, j) = 0.0;
+    if (cell->is_border(border_position::BOTTOM)) field.g(i, j - 1) = 0.0;
+    if (cell->is_border(border_position::LEFT)) field.f(i - 1, j) = 0.0;
+    if (cell->is_border(border_position::RIGHT)) field.f(i, j) = 0.0;
+}
+
 void MovingWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature(field, _cells, _wall_temperature); }
 
 InFlowBoundary::InFlowBoundary(std::vector<Cell *> cells, double u_in, double v_in)

@@ -117,6 +117,8 @@ class MovingWallBoundary : public Boundary {
 
     void applyPressureToCell(Fields &field, Cell *cell) override;
 
+    void applyFluxToCell(Fields &field, Cell *cell) override;
+
     void applyTemperature(Fields &field) override;
 
   private:
