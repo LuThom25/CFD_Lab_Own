@@ -52,6 +52,9 @@ void Boundary::applyFlux(Fields &field) {
     }
 }
 
+// This is implemented as an empty function in the base class, since not all boundaries need to apply temperature
+// boundary conditions. For example, in the current test cases, only the fixed wall boundaries have temperature boundary
+// conditions.
 void Boundary::applyTemperature([[maybe_unused]] Fields &field) {}
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : Boundary(cells) {}
