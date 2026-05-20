@@ -224,6 +224,9 @@ void Case::simulate() { // Inialize variables
     int vtk_count = 0;
     double output_counter = 0.0;
 
+    std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
+              << std::endl;
+
     // Initial state
     if (_energy_eq) {
         for (auto &boundary : _boundaries)
@@ -294,6 +297,9 @@ void Case::simulate() { // Inialize variables
             output_counter -= _output_freq;
         }
     }
+
+    std::cout << "Finished simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
+              << std::endl;
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
