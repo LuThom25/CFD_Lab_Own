@@ -52,7 +52,7 @@ void Boundary::applyFlux(Fields &field) {
     }
 }
 
-void Boundary::applyTemperature(Fields & /*field*/) {}
+void Boundary::applyTemperature([[maybe_unused]] Fields &field) {}
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : Boundary(cells) {}
 
