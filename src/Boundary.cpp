@@ -16,18 +16,28 @@ void apply_wall_temperature(Fields &field, const std::vector<Cell *> &cells,
         const double T_wall = wall_temperature_it->second;
         const int i = cell->i();
         const int j = cell->j();
+        double ghost_temperature_sum = 0.0;
+        int border_count = 0;
 
         if (cell->is_border(border_position::RIGHT)) {
-            field.t(i, j) = ghost_temperature(T_wall, field.t(i + 1, j));
+            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i + 1, j));
+            ++border_count;
         }
         if (cell->is_border(border_position::LEFT)) {
-            field.t(i, j) = ghost_temperature(T_wall, field.t(i - 1, j));
+            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i - 1, j));
+            ++border_count;
         }
         if (cell->is_border(border_position::TOP)) {
-            field.t(i, j) = ghost_temperature(T_wall, field.t(i, j + 1));
+            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i, j + 1));
+            ++border_count;
         }
         if (cell->is_border(border_position::BOTTOM)) {
-            field.t(i, j) = ghost_temperature(T_wall, field.t(i, j - 1));
+            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i, j - 1));
+            ++border_count;
+        }
+
+        if (border_count > 0) {
+            field.t(i, j) = ghost_temperature_sum / static_cast<double>(border_count);
         }
     }
 }
@@ -64,21 +74,28 @@ FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells, std::map<int, do
 
 void FixedWallBoundary::applyVelocityToCell(Fields &field, Cell *cell) {
     const int i = cell->i(), j = cell->j();
+    const bool top = cell->is_border(border_position::TOP);
+    const bool bottom = cell->is_border(border_position::BOTTOM);
+    const bool left = cell->is_border(border_position::LEFT);
+    const bool right = cell->is_border(border_position::RIGHT);
 
-    if (cell->is_border(border_position::TOP)) {
-        field.v(i, j) = 0.0;
+    if (top) field.v(i, j) = 0.0;
+    if (bottom) field.v(i, j - 1) = 0.0;
+    if (left) field.u(i - 1, j) = 0.0;
+    if (right) field.u(i, j) = 0.0;
+
+    // At obstacle corners, tangential ghost values can share a staggered slot
+    // with the normal velocity of the other wall face. Preserve no-penetration.
+    if (top && !right) {
         field.u(i, j) = -field.u(i, j + 1);
     }
-    if (cell->is_border(border_position::BOTTOM)) {
-        field.v(i, j - 1) = 0.0;
+    if (bottom && !right) {
         field.u(i, j) = -field.u(i, j - 1);
     }
-    if (cell->is_border(border_position::LEFT)) {
-        field.u(i - 1, j) = 0.0;
+    if (left && !top) {
         field.v(i, j) = -field.v(i - 1, j);
     }
-    if (cell->is_border(border_position::RIGHT)) {
-        field.u(i, j) = 0.0;
+    if (right && !top) {
         field.v(i, j) = -field.v(i + 1, j);
     }
 }
@@ -140,25 +157,28 @@ MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, std::map<int, 
 
 void MovingWallBoundary::applyVelocityToCell(Fields &field, Cell *cell) {
     const int i = cell->i(), j = cell->j();
+    const bool top = cell->is_border(border_position::TOP);
+    const bool bottom = cell->is_border(border_position::BOTTOM);
+    const bool left = cell->is_border(border_position::LEFT);
+    const bool right = cell->is_border(border_position::RIGHT);
+    const double U_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    const double V_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
 
-    if (cell->is_border(border_position::TOP)) {
-        field.v(i, j) = 0.0;
-        double U_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    if (top) field.v(i, j) = 0.0;
+    if (bottom) field.v(i, j - 1) = 0.0;
+    if (left) field.u(i - 1, j) = 0.0;
+    if (right) field.u(i, j) = 0.0;
+
+    if (top && !right) {
         field.u(i, j) = 2.0 * U_wall - field.u(i, j + 1);
     }
-    if (cell->is_border(border_position::BOTTOM)) {
-        field.v(i, j - 1) = 0.0;
-        double U_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    if (bottom && !right) {
         field.u(i, j) = 2.0 * U_wall - field.u(i, j - 1);
     }
-    if (cell->is_border(border_position::LEFT)) {
-        field.u(i - 1, j) = 0.0;
-        double V_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    if (left && !top) {
         field.v(i, j) = 2.0 * V_wall - field.v(i - 1, j);
     }
-    if (cell->is_border(border_position::RIGHT)) {
-        field.u(i, j) = 0.0;
-        double V_wall = _wall_velocity.at(LidDrivenCavity::moving_wall_id);
+    if (right && !top) {
         field.v(i, j) = 2.0 * V_wall - field.v(i + 1, j);
     }
 }
