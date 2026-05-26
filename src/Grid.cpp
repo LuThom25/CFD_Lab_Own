@@ -24,13 +24,13 @@ Grid::Grid(std::string geom_name, Domain &domain) {
 }
 
 void Grid::build_lid_driven_cavity() {
-    // CQ4: named constant for the ghost-cell layer width; avoids magic +1/+2 literals.
+    // Named constant for the ghost-cell layer width; avoids magic +1/+2 literals.
     constexpr int GHOST = 1;
 
     std::vector<std::vector<int>> geometry_data(_domain.domain_imax + 2 * GHOST,
                                                 std::vector<int>(_domain.domain_jmax + 2 * GHOST, 0));
 
-    // P1: j outer, i inner matches column-major _cells storage (sequential i access).
+    // j outer, i inner matches column-major _cells storage (sequential i access).
     for (int j = 0; j < _domain.domain_jmax + 2 * GHOST; ++j) {
         for (int i = 0; i < _domain.domain_imax + 2 * GHOST; ++i) {
             // Bottom, left and right walls: no-slip fixed wall
@@ -61,12 +61,10 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
                 _fluid_cells.push_back(&_cells(i, j));
             } else if (id == 1) {
                 // Inflow cell (PGM value 1): Dirichlet velocity, Neumann pressure.
-                // Patrick: build InFlowBoundary using inflow_cells().
                 _cells(i, j) = Cell(i, j, cell_type::INFLOW, id);
                 _inflow_cells.push_back(&_cells(i, j));
             } else if (id == 2) {
                 // Outflow cell (PGM value 2): Neumann velocity, Dirichlet pressure (p=0).
-                // Patrick: build OutFlowBoundary using outflow_cells().
                 _cells(i, j) = Cell(i, j, cell_type::OUTFLOW, id);
                 _outflow_cells.push_back(&_cells(i, j));
             } else if (id == LidDrivenCavity::moving_wall_id) {
@@ -74,7 +72,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
                 _moving_wall_cells.push_back(&_cells(i, j));
             } else {
                 // Fixed wall, IDs 3–7. The wall_id is stored in the Cell so that
-                // Dani can look up the correct wall temperature via _wall_temperatures.
+                // Case can look up the correct wall temperature via _wall_temperatures.
                 _cells(i, j) = Cell(i, j, cell_type::FIXED_WALL, id);
                 _fixed_wall_cells.push_back(&_cells(i, j));
             }
@@ -200,7 +198,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     }
 
     // Inner cells
-    // P1: j outer, i inner — matches column-major Matrix storage so that
+    // j outer, i inner — matches column-major Matrix storage so that
     // _cells(i,j) accesses are sequential in memory as i increments.
     for (int j = 1; j < _domain.size_y + 1; ++j) {
         for (int i = 1; i < _domain.size_x + 1; ++i) {
@@ -252,9 +250,9 @@ void Grid::parse_geometry_file(std::string filedoc, std::vector<std::vector<int>
     ss >> depth;
 
     // Following lines : data (origin of x-y coordinate system in bottom-left corner)
-    // R2: check stream state after each read so a truncated/malformed PGM file
-    //     produces a clear error instead of silently leaving cells at their
-    //     default value (0 = fluid), which would give wrong boundary conditions.
+    // Check stream state after each read so a truncated/malformed PGM file
+    // produces a clear error instead of silently leaving cells at their
+    // default value (0 = fluid), which would give wrong boundary conditions.
     for (int y = num_cells_in_y - 1; y > -1; --y) {
         for (int x = 0; x < num_cells_in_x; ++x) {
             if (!(ss >> geometry_data[x][y])) {

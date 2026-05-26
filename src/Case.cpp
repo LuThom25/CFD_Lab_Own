@@ -159,7 +159,6 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
         _boundaries.push_back(std::make_unique<OutFlowBoundary>(_grid.outflow_cells()));
     }
 
-    // → Dani: _wall_temperatures is populated here; use it for temperature BCs
 }
 
 void Case::set_file_names(std::string file_name) {
