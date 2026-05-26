@@ -115,10 +115,10 @@ void FixedWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature
 // timestep at those faces, which causes wrong pressures and eventually divergence.
 void FixedWallBoundary::applyFluxToCell(Fields &field, Cell *cell) {
     const int i = cell->i(), j = cell->j();
-    if (cell->is_border(border_position::TOP))    field.g(i, j)     = 0.0;
+    if (cell->is_border(border_position::TOP)) field.g(i, j) = 0.0;
     if (cell->is_border(border_position::BOTTOM)) field.g(i, j - 1) = 0.0;
-    if (cell->is_border(border_position::LEFT))   field.f(i - 1, j) = 0.0;
-    if (cell->is_border(border_position::RIGHT))  field.f(i, j)     = 0.0;
+    if (cell->is_border(border_position::LEFT)) field.f(i - 1, j) = 0.0;
+    if (cell->is_border(border_position::RIGHT)) field.f(i, j) = 0.0;
 }
 
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : Boundary(cells) {

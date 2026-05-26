@@ -33,7 +33,7 @@ void Fields::calculate_fluxes(Grid &grid) {
         // G_tilda(i,j)
         _G(i, j) = _V(i, j) +
                    _dt * (_nu * Discretization::laplacian(_V, i, j) - Discretization::convection_v(_U, _V, i, j)) -
-                   _beta * _dt * Discretization::interpolate(_T, i, j, 0,  1) * _gy;
+                   _beta * _dt * Discretization::interpolate(_T, i, j, 0, 1) * _gy;
     }
 }
 
@@ -49,8 +49,8 @@ void Fields::calculate_rs(Grid &grid) {
 
     // Fredholm compatibility condition: only for closed domains (all-Neumann pressure BCs).
     // If outflow cells exist, a Dirichlet pressure reference is prescribed at the boundary
-    // and the mean subtraction must NOT be applied, subtracting the mean would shift the entire 
-    // pressure field away from that reference, forcing the SOR to spend extra iterations 
+    // and the mean subtraction must NOT be applied, subtracting the mean would shift the entire
+    // pressure field away from that reference, forcing the SOR to spend extra iterations
     // readjusting the pressure level each timestep.
     if (grid.outflow_cells().empty()) {
         const auto &cells = grid.fluid_cells();
