@@ -62,14 +62,25 @@ make
 ---
 
 ## Run for the different examples, separately or together:
-
+```bash
 ./fluidchen ../example_cases/ChannelWithBFS/ChannelWithBFS.dat
+```
+```bash
 ./fluidchen ../example_cases/ChannelWithObstacle/ChannelWithObstacle.dat
+```
+```bash
 ./fluidchen ../example_cases/FluidTrap/FluidTrap.dat
+```
+```bash
 ./fluidchen ../example_cases/LidDrivenCavity/LidDrivenCavity.dat
-./fluidchen ../example_cases/NaturalConvection/NaturalConvection_a.dat
+```
+```bash
+./fluidchen ../example_cases/NaturalConvection/NaturalConvection_a.dat &&
 ./fluidchen ../example_cases/NaturalConvection/NaturalConvection_b.dat
+```
+```bash
 ./fluidchen ../example_cases/PlaneShearFlow/PlaneShearFlow.dat
+```
+```bash
 ./fluidchen ../example_cases/RayleighBenard/RayleighBenard.dat
-
 ```
