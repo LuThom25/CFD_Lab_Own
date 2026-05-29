@@ -32,4 +32,16 @@ struct Domain {
     int domain_imax{-1};
     /// Number of cells in y direction, not-decomposed
     int domain_jmax{-1};
+
+    // WS3: neighbour MPI ranks (MPI_PROC_NULL if no neighbour on that side)
+    int rank_left{MPI_PROC_NULL};
+    int rank_right{MPI_PROC_NULL};
+    int rank_top{MPI_PROC_NULL};
+    int rank_bottom{MPI_PROC_NULL};
+
+    // WS3: true when this subdomain borders a physical domain boundary
+    bool left_physical{true};
+    bool right_physical{true};
+    bool top_physical{true};
+    bool bottom_physical{true};
 };

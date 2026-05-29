@@ -142,7 +142,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
     domain.domain_imax = imax;
     domain.domain_jmax = jmax;
 
-    build_domain(domain, imax, jmax);
+    build_domain(domain, imax, jmax, _my_rank);
 
     _grid = Grid(_geom_name, domain);
     _field = Fields(nu, dt, tau, alpha, beta, GX, GY, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
@@ -442,11 +442,60 @@ void Case::output_vtk(int timestep, int my_rank) {
     writer->Write();
 }
 
-void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain) {
-    domain.iminb = 0;
-    domain.jminb = 0;
-    domain.imaxb = imax_domain + 2;
-    domain.jmaxb = jmax_domain + 2;
-    domain.size_x = imax_domain;
-    domain.size_y = jmax_domain;
+void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain, int my_rank) {
+    // Each rank must own at least one cell.
+    if (imax_domain < _iproc || jmax_domain < _jproc) {
+        std::cerr << "[Error] Domain too small for the requested decomposition: "
+                  << "imax=" << imax_domain << " < iproc=" << _iproc
+                  << " or jmax=" << jmax_domain << " < jproc=" << _jproc
+                  << ". Aborting.\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    // 2D position of this rank in the process grid (row-major: rank = ip + jp*iproc)
+    int ip = my_rank % _iproc;
+    int jp = my_rank / _iproc;
+
+    // Distribute cells as evenly as possible; first rem ranks get one extra cell
+    int base_x = imax_domain / _iproc;
+    int rem_x  = imax_domain % _iproc;
+    int base_y = jmax_domain / _jproc;
+    int rem_y  = jmax_domain % _jproc;
+
+    int local_x = base_x + (ip < rem_x ? 1 : 0);
+    int local_y = base_y + (jp < rem_y ? 1 : 0);
+
+    // Global start index of fluid cells for this rank (1-based, matching PGM).
+    // min(ip, rem_x) counts how many earlier ranks already received the extra cell
+    int g_istart = 1 + ip * base_x + std::min(ip, rem_x);
+    int g_jstart = 1 + jp * base_y + std::min(jp, rem_y);
+    int g_iend   = g_istart + local_x - 1;
+    int g_jend   = g_jstart + local_y - 1;
+
+    // Ghost-inclusive bounds passed to Grid so it reads the correct PGM slice.
+    // -1: one ghost cell layer on the left/bottom side
+    // +2: one ghost cell layer on the right/top side (+1), and imaxb/jmaxb are
+    //     used as exclusive upper bounds in Grid.cpp loops, so another +1
+    domain.iminb = g_istart - 1;
+    domain.imaxb = g_iend   + 2;
+    domain.jminb = g_jstart - 1;
+    domain.jmaxb = g_jend   + 2;
+
+    domain.size_x = local_x;
+    domain.size_y = local_y;
+
+    // True when this subdomain borders a physical domain boundary.
+    // ip and jp are 0-based, so the last rank has ip == _iproc-1 (not _iproc).
+    domain.left_physical   = (ip == 0);
+    domain.right_physical  = (ip == _iproc - 1);
+    domain.bottom_physical = (jp == 0);
+    domain.top_physical    = (jp == _jproc - 1);
+
+    // Neighbour ranks using the inverse mapping: rank = ip + jp*_iproc.
+    // A neighbour is the same formula with ip±1 or jp±1.
+    // If no neighbour exists on that side, MPI_PROC_NULL is used so MPI_Sendrecv is a no-op there.
+    domain.rank_left   = (ip > 0)        ? (ip - 1) + jp * _iproc       : MPI_PROC_NULL;
+    domain.rank_right  = (ip < _iproc-1) ? (ip + 1) + jp * _iproc       : MPI_PROC_NULL;
+    domain.rank_bottom = (jp > 0)        ? ip       + (jp - 1) * _iproc  : MPI_PROC_NULL;
+    domain.rank_top    = (jp < _jproc-1) ? ip       + (jp + 1) * _iproc  : MPI_PROC_NULL;
 }

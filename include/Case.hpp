@@ -91,8 +91,9 @@ class Case {
     double beta{};  // thermal expansion
 
     // WS3 parallelisation parameters
-    int _iproc{1}; ///< Number of MPI ranks in x-direction
-    int _jproc{1}; ///< Number of MPI ranks in y-direction
+    int _iproc{1};    ///< Number of MPI ranks in x-direction
+    int _jproc{1};    ///< Number of MPI ranks in y-direction
+    int _my_rank{0};  ///< MPI rank of this process (0 in serial, set via MPI_Comm_rank in parallel)
 
     /**
      * @brief Creating file names from given input data file
@@ -127,5 +128,5 @@ class Case {
      * @param[in] Number of cells in x-direction for this MPI rank
      * @param[in] Number of cells in y-direction for this MPI rank
      */
-    void build_domain(Domain &domain, int imax_domain, int jmax_domain);
+    void build_domain(Domain &domain, int imax_domain, int jmax_domain, int my_rank = 0);
 };
