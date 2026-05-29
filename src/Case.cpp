@@ -110,10 +110,20 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                     int n;
                     file >> n;
                 }
+                // WS3: MPI domain decomposition
+                if (var == "iproc") file >> _iproc;
+                if (var == "jproc") file >> _jproc;
             }
         }
     }
     file.close();
+
+    // Validate iproc / jproc
+    if (_iproc < 1 || _jproc < 1) {
+        std::cerr << "[Error] iproc and jproc must both be >= 1 (got iproc=" << _iproc << ", jproc=" << _jproc
+                  << "). Aborting.\n";
+        std::exit(EXIT_FAILURE);
+    }
     _UIN = UIN;
     _VIN = VIN;
 

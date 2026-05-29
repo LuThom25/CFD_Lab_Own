@@ -90,6 +90,10 @@ class Case {
     double alpha{}; // thermal conductivity
     double beta{};  // thermal expansion
 
+    // WS3 parallelisation parameters
+    int _iproc{1}; ///< Number of MPI ranks in x-direction
+    int _jproc{1}; ///< Number of MPI ranks in y-direction
+
     /**
      * @brief Creating file names from given input data file
      *
