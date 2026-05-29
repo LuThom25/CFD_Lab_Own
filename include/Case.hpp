@@ -26,7 +26,7 @@ class Case {
      *
      * @param[in] Input file name
      */
-    Case(std::string file_name, int argn, char **args);
+    Case(std::string file_name, int argn, char **args, int size, int my_rank); // added size and my_rank );
 
     /**
      * @brief Main function to simulate the flow until the end time.
@@ -74,26 +74,25 @@ class Case {
     /// Name of the active pressure solver (stored for console output)
     std::string _solver_name{"SOR"};
 
-    // ── WS2: geometry and boundary parameters ─────────────────────────────────
-    /// Inlet x-velocity read from "UIN" in .dat (used by Patrick's InFlowBoundary)
-    double _UIN{0.0};
-    /// Inlet y-velocity read from "VIN" in .dat (used by Patrick's InFlowBoundary)
-    double _VIN{0.0};
-    /// True when "energy_eq on" appears in .dat (used by Dani/Iciar)
-    bool _energy_eq{false};
+    // WS2: geometry and boundary parameters
+    double _UIN{0.0};       // Inlet x-velocity read from "UIN" in .dat
+    double _VIN{0.0};       // Inlet y-velocity read from "VIN" in .dat 
+    bool _energy_eq{false}; // True when "energy_eq on" appears in .dat 
     /// Wall temperatures keyed by PGM cell ID (3–7); -1.0 = adiabatic.
-    /// Read from wall_temp_3/4/5 entries in .dat. Used by Dani for temperature BCs.
+    /// Read from wall_temp_3/4/5 entries in .dat.
     std::map<int, double> _wall_temperatures;
 
-    // WS2 energy transport variables
+    // WS2: energy transport variables
     double TI{};    // initial temperature
     double alpha{}; // thermal conductivity
     double beta{};  // thermal expansion
 
     // WS3 parallelisation parameters
-    int _iproc{1};    ///< Number of MPI ranks in x-direction
-    int _jproc{1};    ///< Number of MPI ranks in y-direction
-    int _my_rank{0};  ///< MPI rank of this process (0 in serial, set via MPI_Comm_rank in parallel)
+    int _iproc{1};    // Number of MPI ranks in x-direction
+    int _jproc{1};    // Number of MPI ranks in y-direction
+    int _my_rank{0};  // MPI rank of this process (0 in serial, set via MPI_Comm_rank in parallel)
+    int _size{1};     // Total number of MPI processes
+    bool _parallel{false}; // used for serial/parallel run
 
     /**
      * @brief Creating file names from given input data file

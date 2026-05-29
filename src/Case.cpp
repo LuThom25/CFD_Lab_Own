@@ -1,3 +1,4 @@
+#include <mpi.h>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -22,7 +23,12 @@ namespace filesystem = std::filesystem;
 #include "Case.hpp"
 #include "Enums.hpp"
 
-Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
+Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int my_rank) { // added size and rank 
+    // Assign MPI members
+    _size = size;
+    _my_rank = my_rank;
+    // _iproc and _jproc already set to 1 (default) in .hpp
+
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
@@ -114,6 +120,24 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/) {
                 if (var == "iproc") file >> _iproc;
                 if (var == "jproc") file >> _jproc;
             }
+        }
+        // Enable/disable the communication steps
+        // This allows the code to work both in serial and parallel (default set to serial run)
+        if (_size > 1){
+            _parallel = true; // parallel
+        }
+        // Check for any invalid user input
+        // 1. We should input value divisions of the domain
+        // 2. The total number of processes in the whole domain (size) should match 
+        //    the total divisions of the domain (iproc * jproc)
+        if (_iproc <= 0 || _jproc <= 0){
+            std::cout << "Error: invalid user input for iproc or jproc. Values less than or equal to 0. \n";
+            MPI_Finalize(); // Finalize before exiting the program
+            exit(1);        // Terminate the program 
+        }else if (_iproc * _jproc != _size){
+            std::cout << "Error: invalid user input for iproc or jproc. Sizes dont match. \n";
+            MPI_Finalize(); 
+            exit(1); 
         }
     }
     file.close();
@@ -245,11 +269,13 @@ void Case::simulate() { // Inialize variables
     vtk_count++;
 
     // Loop over time
+    // Exchange parameter values before or after imposing the bc?
     while (t < _t_end) {
 
         // Step 1: Velocity BCs (ghost cells, moving lid)
         for (auto &boundary : _boundaries)
             boundary->applyVelocity(_field);
+        // Exchange velocity values
 
         // Step 2: Compute new temperature values (dependent on u and v) and apply BCs
         if (_energy_eq) {
@@ -257,11 +283,13 @@ void Case::simulate() { // Inialize variables
             for (auto &boundary : _boundaries)
                 boundary->applyTemperature(_field);
         }
+        // Exchange temperatuer values
 
         // Step 3: Compute intermediate fluxes F and G (tilda) and their BCs
         _field.calculate_fluxes(_grid);
         for (auto &boundary : _boundaries)
             boundary->applyFlux(_field);
+        // Exchange F and G values
 
         // Step 4: Calculate the RHS of pressure Poisson equation
         _field.calculate_rs(_grid);
@@ -276,9 +304,11 @@ void Case::simulate() { // Inialize variables
             // Apply BCs on the pressure field
             for (auto &boundary : _boundaries)
                 boundary->applyPressure(_field);
-            ++iter;
+            // Exchange pressure values
+            // Calculate the global residual (sum over all processor domains)
+            // MPI_Allreduce()
+            ++iter;   
         }
-
         // Divergence check
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
             ++timestep; // count this step so avg_sor = total_iter / total_steps is bounded by itermax
@@ -292,6 +322,8 @@ void Case::simulate() { // Inialize variables
 
         // Step 7: Compute adaptive dt for the next timestep
         dt = _field.calculate_dt(_grid);
+        // Find flobal minimum time step
+        // MPI_MIN
 
         // Update time, timestep and counter
         t += dt;
