@@ -7,38 +7,35 @@ double ghost_temperature(double wall_temperature, double fluid_temperature) {
     return 2.0 * wall_temperature - fluid_temperature;
 }
 
-void apply_wall_temperature(Fields &field, const std::vector<Cell *> &cells,
-                            const std::map<int, double> &wall_temperature) {
-    for (auto cell : cells) {
-        const auto wall_temperature_it = wall_temperature.find(cell->wall_id());
-        if (wall_temperature_it == wall_temperature.end()) continue;
+void apply_wall_temperature_to_cell(Fields &field, Cell *cell, const std::map<int, double> &wall_temperature) {
+    const auto wall_temperature_it = wall_temperature.find(cell->wall_id());
+    if (wall_temperature_it == wall_temperature.end()) return;
 
-        const double T_wall = wall_temperature_it->second;
-        const int i = cell->i();
-        const int j = cell->j();
-        double ghost_temperature_sum = 0.0;
-        int border_count = 0;
+    const double T_wall = wall_temperature_it->second;
+    const int i = cell->i();
+    const int j = cell->j();
+    double ghost_temperature_sum = 0.0;
+    int border_count = 0;
 
-        if (cell->is_border(border_position::RIGHT)) {
-            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i + 1, j));
-            ++border_count;
-        }
-        if (cell->is_border(border_position::LEFT)) {
-            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i - 1, j));
-            ++border_count;
-        }
-        if (cell->is_border(border_position::TOP)) {
-            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i, j + 1));
-            ++border_count;
-        }
-        if (cell->is_border(border_position::BOTTOM)) {
-            ghost_temperature_sum += ghost_temperature(T_wall, field.t(i, j - 1));
-            ++border_count;
-        }
+    if (cell->is_border(border_position::RIGHT)) {
+        ghost_temperature_sum += ghost_temperature(T_wall, field.t(i + 1, j));
+        ++border_count;
+    }
+    if (cell->is_border(border_position::LEFT)) {
+        ghost_temperature_sum += ghost_temperature(T_wall, field.t(i - 1, j));
+        ++border_count;
+    }
+    if (cell->is_border(border_position::TOP)) {
+        ghost_temperature_sum += ghost_temperature(T_wall, field.t(i, j + 1));
+        ++border_count;
+    }
+    if (cell->is_border(border_position::BOTTOM)) {
+        ghost_temperature_sum += ghost_temperature(T_wall, field.t(i, j - 1));
+        ++border_count;
+    }
 
-        if (border_count > 0) {
-            field.t(i, j) = ghost_temperature_sum / static_cast<double>(border_count);
-        }
+    if (border_count > 0) {
+        field.t(i, j) = ghost_temperature_sum / static_cast<double>(border_count);
     }
 }
 
@@ -62,10 +59,11 @@ void Boundary::applyFlux(Fields &field) {
     }
 }
 
-// This is implemented as an empty function in the base class, since not all boundaries need to apply temperature
-// boundary conditions. For example, in the current test cases, only the fixed wall boundaries have temperature boundary
-// conditions.
-void Boundary::applyTemperature([[maybe_unused]] Fields &field) {}
+void Boundary::applyTemperature(Fields &field) {
+    for (auto cell : _cells) {
+        applyTemperatureToCell(field, cell);
+    }
+}
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : Boundary(cells) {}
 
@@ -128,7 +126,9 @@ void FixedWallBoundary::applyPressureToCell(Fields &field, Cell *cell) {
     field.p(i, j) = pressure * count_inv[count - 1];
 }
 
-void FixedWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature(field, _cells, _wall_temperature); }
+void FixedWallBoundary::applyTemperatureToCell(Fields &field, Cell *cell) {
+    apply_wall_temperature_to_cell(field, cell, _wall_temperature);
+}
 
 // For each wall cell, we make zero the flux at the face shared with a fluid neighbour.
 // Without this, the pressure solver uses leftover flux values from the previous
@@ -219,7 +219,9 @@ void MovingWallBoundary::applyFluxToCell(Fields &field, Cell *cell) {
     if (cell->is_border(border_position::RIGHT)) field.f(i, j) = 0.0;
 }
 
-void MovingWallBoundary::applyTemperature(Fields &field) { apply_wall_temperature(field, _cells, _wall_temperature); }
+void MovingWallBoundary::applyTemperatureToCell(Fields &field, Cell *cell) {
+    apply_wall_temperature_to_cell(field, cell, _wall_temperature);
+}
 
 InFlowBoundary::InFlowBoundary(std::vector<Cell *> cells, double u_in, double v_in)
     : Boundary(cells), _u_in(u_in), _v_in(v_in) {}
