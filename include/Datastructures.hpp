@@ -5,7 +5,7 @@
 #include <vector>
 
 /**
- * @brief General 2D data structure around std::vector, in column
+ * @brief General 2D data structure around std::vector, in row
  * major format.
  *
  */
