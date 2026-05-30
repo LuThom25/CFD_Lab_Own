@@ -63,7 +63,15 @@ class Boundary {
      *
      * @param[in] Field to be applied
      */
-    virtual void applyTemperature(Fields &field);
+    void applyTemperature(Fields &field);
+
+    /**
+     * @brief Method to patch the temperature boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyTemperatureToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell) {};
 
     /**
      * @brief Virtual destructor for the boundary class.
@@ -92,7 +100,7 @@ class FixedWallBoundary : public Boundary {
 
     void applyPressureToCell(Fields &field, Cell *cell) override;
 
-    void applyTemperature(Fields &field) override;
+    void applyTemperatureToCell(Fields &field, Cell *cell) override;
 
     void applyFluxToCell(Fields &field, Cell *cell) override;
 
@@ -119,7 +127,7 @@ class MovingWallBoundary : public Boundary {
 
     void applyFluxToCell(Fields &field, Cell *cell) override;
 
-    void applyTemperature(Fields &field) override;
+    void applyTemperatureToCell(Fields &field, Cell *cell) override;
 
   private:
     std::map<int, double> _wall_velocity;
