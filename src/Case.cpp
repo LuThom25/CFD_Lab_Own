@@ -475,59 +475,84 @@ void Case::output_vtk(int timestep, int my_rank) {
 }
 
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain, int my_rank) {
-    // Each rank must own at least one cell.
-    if (imax_domain < _iproc || jmax_domain < _jproc) {
-        std::cerr << "[Error] Domain too small for the requested decomposition: "
-                  << "imax=" << imax_domain << " < iproc=" << _iproc
-                  << " or jmax=" << jmax_domain << " < jproc=" << _jproc
-                  << ". Aborting.\n";
-        std::exit(EXIT_FAILURE);
+    /* The rank numbering is assigned by MPI, going left to right, bottom to top.
+    *  We need to locate this rank within the global (whole) domain in terms of its x,y position. 
+    *  e.g. if we have my_rank = 0 we have the lower-left corner, which is the (0,0) block (subdomain). 
+    */
+    int ip = my_rank % _iproc; // x-position of this rank in the global domain
+    int jp = my_rank / _iproc; // y-position of this rank in the global domain
+
+    // Distribute cells (as evenly as possible) to each process
+    int min_cells_x = imax_domain / _iproc; // minimum # of cells each rank gets in x
+    int leftover_x  = imax_domain % _iproc; // remaining cells 
+    int min_cells_y = jmax_domain / _jproc;      
+    int leftover_y  = jmax_domain % _jproc;
+    // Assignment of leftovers (when it corresponds)
+    int local_x = min_cells_x; // number of cells in x for this rank
+    int local_y = min_cells_y; // number of cells in y for this rank
+    if (ip < leftover_x){ 
+        local_x += 1; 
+    }    
+    if (jp < leftover_y){ 
+        local_y += 1; 
     }
 
-    // 2D position of this rank in the process grid (row-major: rank = ip + jp*iproc)
-    int ip = my_rank % _iproc;
-    int jp = my_rank / _iproc;
+    /* In order to correctly read the PGM geometry file, we need to know where (in which cell)
+    *  in the global domain each subdomain starts and ends.
+    *  We compute the global start index (1-based, matching PGM indexing) by accumulating
+    *  the cell counts of all ranks that come before this one in x (or y).
+    *  Each previous rank owns min_cells_x (or min_cells_y) cells, plus 1 extra if it received a leftover.
+    */
+    int gi_start = 1;
+    int gj_start = 1;
 
-    // Distribute cells as evenly as possible; first rem ranks get one extra cell
-    int base_x = imax_domain / _iproc;
-    int rem_x  = imax_domain % _iproc;
-    int base_y = jmax_domain / _jproc;
-    int rem_y  = jmax_domain % _jproc;
+    for (int i = 0; i<ip; i++){
+        gi_start += min_cells_x;
+        if (i < leftover_x){
+            gi_start += 1;
+        }
+    }
+    for (int j = 0; j < jp; j++){
+        gj_start += min_cells_y;
+        if (j < leftover_y){
+            gj_start += 1;
+        }
+    }
+    
+    int gi_end = gi_start + local_x - 1;
+    int gj_end = gj_start + local_y - 1;
 
-    int local_x = base_x + (ip < rem_x ? 1 : 0);
-    int local_y = base_y + (jp < rem_y ? 1 : 0);
-
-    // Global start index of fluid cells for this rank (1-based, matching PGM).
-    // min(ip, rem_x) counts how many earlier ranks already received the extra cell
-    int g_istart = 1 + ip * base_x + std::min(ip, rem_x);
-    int g_jstart = 1 + jp * base_y + std::min(jp, rem_y);
-    int g_iend   = g_istart + local_x - 1;
-    int g_jend   = g_jstart + local_y - 1;
-
-    // Ghost-inclusive bounds passed to Grid so it reads the correct PGM slice.
-    // -1: one ghost cell layer on the left/bottom side
-    // +2: one ghost cell layer on the right/top side (+1), and imaxb/jmaxb are
-    //     used as exclusive upper bounds in Grid.cpp loops, so another +1
-    domain.iminb = g_istart - 1;
-    domain.imaxb = g_iend   + 2;
-    domain.jminb = g_jstart - 1;
-    domain.jmaxb = g_jend   + 2;
+    // Domain struct filling
+    /* Apart from our own PGM-domain cells we need ghost cells to impose boundary conditions and
+    *  to exchange values with neighboring subdomains during MPI communication. We do so by:
+    *  -1: one ghost cell layer on the left/bottom side
+    *  +2: one ghost cell layer on the right/top side, plus one more to include 
+    *      imaxb/jmaxb when looping over the grid (1+1=2)
+    */
+    domain.iminb = gi_start - 1; // left layer
+    domain.jminb = gj_start - 1; // bottom layer
+    domain.imaxb = gi_end + 2; // right layer
+    domain.jmaxb = gj_end + 2; // top layer
 
     domain.size_x = local_x;
     domain.size_y = local_y;
 
-    // True when this subdomain borders a physical domain boundary.
-    // ip and jp are 0-based, so the last rank has ip == _iproc-1 (not _iproc).
+    /* Mark whether this rank contains a physical boundary of the domain -> true
+    *  or if the boundaries are internal boundaries between two subdomains -> false
+    */
     domain.left_physical   = (ip == 0);
-    domain.right_physical  = (ip == _iproc - 1);
+    domain.right_physical  = (ip == _iproc - 1); // because ip and jp are 0-based 
     domain.bottom_physical = (jp == 0);
     domain.top_physical    = (jp == _jproc - 1);
 
-    // Neighbour ranks using the inverse mapping: rank = ip + jp*_iproc.
-    // A neighbour is the same formula with ip±1 or jp±1.
-    // If no neighbour exists on that side, MPI_PROC_NULL is used so MPI_Sendrecv is a no-op there.
-    domain.rank_left   = (ip > 0)        ? (ip - 1) + jp * _iproc       : MPI_PROC_NULL;
-    domain.rank_right  = (ip < _iproc-1) ? (ip + 1) + jp * _iproc       : MPI_PROC_NULL;
-    domain.rank_bottom = (jp > 0)        ? ip       + (jp - 1) * _iproc  : MPI_PROC_NULL;
-    domain.rank_top    = (jp < _jproc-1) ? ip       + (jp + 1) * _iproc  : MPI_PROC_NULL;
+    /* In order to exchange data at the internal boundary between two subdomains, we must store
+    *  the rank of the neighboring subdomains: left, right, bottom, top.
+    *  For ranks on the edge of the global domain, some neighbors don't exist. In those cases we
+    *  assign MPI_PROC_NULL so that MPI_Sendrecv silently does nothing in that direction.
+    */
+    // Ranks (rank = ip + jp * _iproc) of the left, right, bottom, top neighbors:
+    domain.rank_left   = (ip == 0) ? MPI_PROC_NULL : (ip - 1) + jp * _iproc; 
+    domain.rank_right  = (ip == _iproc - 1) ? MPI_PROC_NULL : (ip + 1) + jp * _iproc;
+    domain.rank_bottom = (jp == 0) ? MPI_PROC_NULL : ip + (jp - 1) * _iproc;
+    domain.rank_top    = (jp == _jproc - 1) ? MPI_PROC_NULL : ip + (jp + 1) * _iproc;
 }
