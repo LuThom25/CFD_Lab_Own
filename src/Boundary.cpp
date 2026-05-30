@@ -2,11 +2,14 @@
 
 inline constexpr double ADIABATIC_WALL_TEMPERATURE = -1.0;
 
+// Helper for next function
 double ghost_temperature(double wall_temperature, double fluid_temperature) {
     if (wall_temperature == ADIABATIC_WALL_TEMPERATURE) return fluid_temperature;
     return 2.0 * wall_temperature - fluid_temperature;
 }
 
+// Free floating funtion since expected same behaviour for all types of boundaries
+// (we could also duplicate as with other variables)
 void apply_wall_temperature_to_cell(Fields &field, Cell *cell, const std::map<int, double> &wall_temperature) {
     const auto wall_temperature_it = wall_temperature.find(cell->wall_id());
     if (wall_temperature_it == wall_temperature.end()) return;
