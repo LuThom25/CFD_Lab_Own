@@ -14,9 +14,13 @@ Grid::Grid(std::string geom_name, Domain &domain) {
     _cells = Matrix<Cell>(_domain.size_x + 2, _domain.size_y + 2);
 
     if (geom_name.compare("NONE")) {
+
+        //matrix for Geo file parsing 
         std::vector<std::vector<int>> geometry_data(_domain.domain_imax + 2,
                                                     std::vector<int>(_domain.domain_jmax + 2, 0));
+
         parse_geometry_file(geom_name, geometry_data);
+
         assign_cell_types(geometry_data);
     } else {
         build_lid_driven_cavity();

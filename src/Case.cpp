@@ -536,7 +536,7 @@ void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain, int my
     *  to exchange values with neighboring subdomains during MPI communication. We do so by:
     *  -1: one ghost cell layer on the left/bottom side
     *  +2: one ghost cell layer on the right/top side, plus one more to include 
-    *      imaxb/jmaxb when looping over the grid (1+1=2)
+    *      imaxb/jmaxb when looping over the grid, since loops are written on < condition. 
     */
     domain.iminb = gi_start - 1; // left layer
     domain.jminb = gj_start - 1; // bottom layer

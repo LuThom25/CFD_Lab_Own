@@ -8,6 +8,9 @@
  *
  */
 struct Domain {
+
+
+    // These indexes would only used for cell type assingment(?)
     /// Minimum x index including ghost cells
     int iminb{-1};
     /// Maximum x index including ghost cells
@@ -23,7 +26,7 @@ struct Domain {
     /// Cell height
     double dy{-1.0};
 
-    /// Number of cells in x direction (without ghost)
+    /// Number of cells in x direction (without ghost), used in grid with +2 to create matrix of cells
     int size_x{-1};
     /// Number of cells in y direction
     int size_y{-1};
