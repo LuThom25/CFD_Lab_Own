@@ -5,6 +5,11 @@
 
 SOR_Standard::SOR_Standard(double omega) : _omega(omega) {}
 
+// We divide into update method and residual calculation method. This way the residual 
+// can be computed with updated BCs and halo values. Previously it also worked, since the difference
+// was probaly negligible. Now that we can have way more non-updated cells thanks to the halo, 
+// it may become relevant. 
+
 void SOR_Standard::iterate(Fields &field, Grid &grid) {
     double dx = grid.dx();
     double dy = grid.dy();
