@@ -263,15 +263,21 @@ void Case::simulate() { // Inialize variables
               << std::endl;
 
 
-    // No intial halo communication is necesary since values are already read.
 
     // Initial ghost cells update to enforce BCs
     if (_energy_eq) {
         for (auto &boundary : _boundaries)
             boundary->applyTemperature(_field);
+        Communication::communicate_field(_field.t_matrix(), _grid.domain());
     }
+
     for (auto &boundary : _boundaries)
         boundary->applyPressure(_field);
+    Communication::communicate_field(_field.p_matrix(), _grid.domain());
+    // After BC enforcement we communicate halos. Boundary cells in the halos have 
+    // been updated. 
+
+
 
 
     output_vtk(timestep);
@@ -283,6 +289,8 @@ void Case::simulate() { // Inialize variables
         // Step 1: Velocity BCs (ghost cells, moving lid)
         for (auto &boundary : _boundaries)
             boundary->applyVelocity(_field);
+        Communication::communicate_field(_field.u_matrix(), _grid.domain());
+        Communication::communicate_field(_field.v_matrix(), _grid.domain());
 
         // Step 2: Compute new temperature values (dependent on u and v) and apply BCs
         if (_energy_eq) {
@@ -291,7 +299,8 @@ void Case::simulate() { // Inialize variables
                 boundary->applyTemperature(_field);
             Communication::communicate_field(_field.t_matrix(), _grid.domain());
         }
-        // Halo values communication must happen after every field update. 
+        // Halo values communication must happen after every field update. Both 
+        // explicit ones and every SOR iteration.
 
         // Step 3: Compute intermediate fluxes F and G (tilda) and their BCs
         _field.calculate_fluxes(_grid);
