@@ -133,11 +133,13 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
         // 2. The total number of processes in the whole domain (size) should match 
         //    the total divisions of the domain (iproc * jproc)
         if (_iproc <= 0 || _jproc <= 0){
-            std::cout << "Error: invalid user input for iproc or jproc. Values less than or equal to 0. \n";
+            if (_my_rank == 0)
+                std::cout << "Error: invalid user input for iproc or jproc. Values less than or equal to 0. \n";
             MPI_Finalize(); // Finalize before exiting the program
             exit(1);        // Terminate the program 
         }else if (_iproc * _jproc != _size){
-            std::cout << "Error: invalid user input for iproc or jproc. Sizes dont match. \n";
+            if (_my_rank == 0)
+                std::cout << "Error: invalid user input for iproc or jproc. Sizes dont match. \n";
             MPI_Finalize(); 
             exit(1); 
         }
@@ -146,8 +148,9 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
 
     // Validate iproc / jproc
     if (_iproc < 1 || _jproc < 1) {
-        std::cerr << "[Error] iproc and jproc must both be >= 1 (got iproc=" << _iproc << ", jproc=" << _jproc
-                  << "). Aborting.\n";
+        if (_my_rank == 0)
+            std::cerr << "[Error] iproc and jproc must both be >= 1 (got iproc=" << _iproc << ", jproc=" << _jproc
+                      << "). Aborting.\n";
         std::exit(EXIT_FAILURE);
     }
     _UIN = UIN;
@@ -259,8 +262,9 @@ void Case::simulate() { // Inialize variables
     int vtk_count = 0;
     double output_counter = 0.0;
 
-    std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
-              << std::endl;
+    if (_my_rank == 0)
+        std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
+                  << std::endl;
 
 
 
@@ -339,8 +343,9 @@ void Case::simulate() { // Inialize variables
         // Divergence check
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
             ++timestep; // count this step so avg_sor = total_iter / total_steps is bounded by itermax
-            std::cout << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t << "  step=" << timestep
-                      << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n";
+            if (_my_rank == 0)
+                std::cout << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t << "  step=" << timestep
+                          << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n";
             break;
         }
 
@@ -368,8 +373,9 @@ void Case::simulate() { // Inialize variables
         }
     }
 
-    std::cout << "Finished simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
-              << std::endl;
+    if (_my_rank == 0)
+        std::cout << "Finished simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
+                  << std::endl;
 }
 
 void Case::output_vtk(int timestep) {

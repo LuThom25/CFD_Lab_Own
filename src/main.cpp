@@ -15,8 +15,10 @@ int main(int argn, char **args) {
         problem.simulate();
 
     } else {
-        std::cout << "Error: No input file is provided to fluidchen." << std::endl;
-        std::cout << "Example usage: /path/to/fluidchen /path/to/input_data.dat" << std::endl;
+        if (Communication::get_rank() == 0) {
+            std::cout << "Error: No input file is provided to fluidchen." << std::endl;
+            std::cout << "Example usage: /path/to/fluidchen /path/to/input_data.dat" << std::endl;
+        }
     }
     Communication::finalize(); // Finalize MPI
     
