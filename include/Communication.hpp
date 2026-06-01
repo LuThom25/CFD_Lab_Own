@@ -10,7 +10,7 @@
 // call-site placeholders.
 #pragma once
 #include <mpi.h>
-#include "Fields.hpp"
+#include "Datastructures.hpp"
 #include "Domain.hpp"
 class Communication {
     private:
@@ -23,10 +23,8 @@ class Communication {
         static int get_size();
         static int get_rank();
         // Exchange ghost-cell (halo) values between neighbouring MPI ranks.
-        // Called after each SOR sweep and after flux/velocity updates.
-        static void communicate_pressure(Fields &field, const Domain &domain);
-
-        static void communicate(Fields &field, const Domain &domain);
+        // Called after each field update (either explicit or SOR iteration)
+        static void communicate_field(Matrix<double> &field, const Domain &domain);
 
         static double reduce_min(double value);
         static double reduce_sum(double value);
