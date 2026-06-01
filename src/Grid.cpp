@@ -54,11 +54,11 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     int i = 0;
     int j = 0;
 
-    for (int j_geom = _domain.jminb; j_geom < _domain.jmaxb; ++j_geom) {
+    for (int j_geom = _domain.jminb; j_geom <= _domain.jmaxb; ++j_geom) {
         {
             i = 0;
         }
-        for (int i_geom = _domain.iminb; i_geom < _domain.imaxb; ++i_geom) {
+        for (int i_geom = _domain.iminb; i_geom <= _domain.imaxb; ++i_geom) {
             const int id = geometry_data.at(i_geom).at(j_geom);
             if (id == 0) {
                 _cells(i, j) = Cell(i, j, cell_type::FLUID);

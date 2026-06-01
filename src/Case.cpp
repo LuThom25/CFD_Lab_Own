@@ -535,13 +535,12 @@ void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain, int my
     /* Apart from our own PGM-domain cells we need ghost cells to impose boundary conditions and
     *  to exchange values with neighboring subdomains during MPI communication. We do so by:
     *  -1: one ghost cell layer on the left/bottom side
-    *  +2: one ghost cell layer on the right/top side, plus one more to include 
-    *      imaxb/jmaxb when looping over the grid, since loops are written on < condition. 
+    *  +1: one ghost cell layer on the right/top side.
     */
     domain.iminb = gi_start - 1; // left layer
     domain.jminb = gj_start - 1; // bottom layer
-    domain.imaxb = gi_end + 2; // right layer
-    domain.jmaxb = gj_end + 2; // top layer
+    domain.imaxb = gi_end + 1; // right layer
+    domain.jmaxb = gj_end + 1; // top layer
 
     domain.size_x = local_x;
     domain.size_y = local_y;
