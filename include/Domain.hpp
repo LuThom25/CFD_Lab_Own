@@ -23,12 +23,12 @@ struct Domain {
     /// Cell height
     double dy{-1.0};
 
-    /// Number of cells in x direction
+    /// Number of cells in x direction (without ghost)
     int size_x{-1};
     /// Number of cells in y direction
     int size_y{-1};
 
-    /// Number of cells in x direction, not-decomposed
+    /// Number of cells in x direction, not-decomposed (without ghost)
     int domain_imax{-1};
     /// Number of cells in y direction, not-decomposed
     int domain_jmax{-1};

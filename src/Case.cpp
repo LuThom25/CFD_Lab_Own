@@ -481,12 +481,15 @@ void Case::output_vtk(int timestep, int my_rank) {
 }
 
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain, int my_rank) {
+    // imax_domain is the non-decomposed domain number of cells without ghosts
+
+
     /* The rank numbering is assigned by MPI, going left to right, bottom to top.
     *  We need to locate this rank within the global (whole) domain in terms of its x,y position. 
     *  e.g. if we have my_rank = 0 we have the lower-left corner, which is the (0,0) block (subdomain). 
     */
-    int ip = my_rank % _iproc; // x-position of this rank in the global domain
-    int jp = my_rank / _iproc; // y-position of this rank in the global domain
+    int ip = my_rank % _iproc; // x-index of this rank in the domain decomposition
+    int jp = my_rank / _iproc; // y-index of this rank in the domain decomposition
 
     // Distribute cells (as evenly as possible) to each process
     int min_cells_x = imax_domain / _iproc; // minimum # of cells each rank gets in x
@@ -557,8 +560,27 @@ void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain, int my
     *  assign MPI_PROC_NULL so that MPI_Sendrecv silently does nothing in that direction.
     */
     // Ranks (rank = ip + jp * _iproc) of the left, right, bottom, top neighbors:
-    domain.rank_left   = (ip == 0) ? MPI_PROC_NULL : (ip - 1) + jp * _iproc; 
-    domain.rank_right  = (ip == _iproc - 1) ? MPI_PROC_NULL : (ip + 1) + jp * _iproc;
-    domain.rank_bottom = (jp == 0) ? MPI_PROC_NULL : ip + (jp - 1) * _iproc;
-    domain.rank_top    = (jp == _jproc - 1) ? MPI_PROC_NULL : ip + (jp + 1) * _iproc;
+    if (ip == 0) {
+        domain.rank_left = MPI_PROC_NULL;
+    } else {
+        domain.rank_left = (ip - 1) + jp * _iproc;
+    }
+
+    if (ip == _iproc - 1) {
+        domain.rank_right = MPI_PROC_NULL;
+    } else {
+        domain.rank_right = (ip + 1) + jp * _iproc;
+    }
+
+    if (jp == 0) {
+        domain.rank_bottom = MPI_PROC_NULL;
+    } else {
+        domain.rank_bottom = ip + (jp - 1) * _iproc;
+    }
+
+    if (jp == _jproc - 1) {
+        domain.rank_top = MPI_PROC_NULL;
+    } else {
+        domain.rank_top = ip + (jp + 1) * _iproc;
+    }
 }
