@@ -260,11 +260,15 @@ void Case::simulate() { // Inialize variables
     std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
               << std::endl;
 
-    // Initial state
+    // Initial ghost cells update to enforce BCs
     if (_energy_eq) {
         for (auto &boundary : _boundaries)
             boundary->applyTemperature(_field);
     }
+    for (auto &boundary : _boundaries)
+        boundary->applyPressure(_field);
+
+
     output_vtk(timestep);
     vtk_count++;
 
@@ -293,6 +297,8 @@ void Case::simulate() { // Inialize variables
 
         // Step 4: Calculate the RHS of pressure Poisson equation
         _field.calculate_rs(_grid);
+
+
 
         // Step 5: SOR pressure solve: iterate until res < eps or itermax reached
         // Initialize SOR stopping criteria
