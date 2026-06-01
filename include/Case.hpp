@@ -112,9 +112,8 @@ class Case {
      * interpolated to the cell faces
      *
      * @param[in] Timestep of the solution
-     * @param[in] Current rank of the executing process
      */
-    void output_vtk(int t, int my_rank = 0);
+    void output_vtk(int t);
 
     /**
      * @brief Fill out domain object

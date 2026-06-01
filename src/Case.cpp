@@ -264,6 +264,11 @@ void Case::simulate() { // Inialize variables
 
 
 
+    // Halo values communication must happen after every field update. Both 
+    // explicit ones and every SOR iteration.
+    // After BC enforcement we also communicate halos since it is still a field update.
+    // Boundary cells in the halos have  been updated. 
+
     // Initial ghost cells update to enforce BCs
     if (_energy_eq) {
         for (auto &boundary : _boundaries)
@@ -274,10 +279,6 @@ void Case::simulate() { // Inialize variables
     for (auto &boundary : _boundaries)
         boundary->applyPressure(_field);
     Communication::communicate_field(_field.p_matrix(), _grid.domain());
-    // After BC enforcement we communicate halos. Boundary cells in the halos have 
-    // been updated. 
-
-
 
 
     output_vtk(timestep);
@@ -299,8 +300,6 @@ void Case::simulate() { // Inialize variables
                 boundary->applyTemperature(_field);
             Communication::communicate_field(_field.t_matrix(), _grid.domain());
         }
-        // Halo values communication must happen after every field update. Both 
-        // explicit ones and every SOR iteration.
 
         // Step 3: Compute intermediate fluxes F and G (tilda) and their BCs
         _field.calculate_fluxes(_grid);
@@ -373,7 +372,7 @@ void Case::simulate() { // Inialize variables
               << std::endl;
 }
 
-void Case::output_vtk(int timestep, int my_rank) {
+void Case::output_vtk(int timestep) {
     // Create a new structured grid
     vtkSmartPointer<vtkStructuredGrid> structuredGrid = vtkSmartPointer<vtkStructuredGrid>::New();
 
@@ -386,13 +385,9 @@ void Case::output_vtk(int timestep, int my_rank) {
     double x = _grid.domain().iminb * dx;
     double y = _grid.domain().jminb * dy;
 
-    { y += dy; }
-    { x += dx; }
-
     double z = 0;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
         x = _grid.domain().iminb * dx;
-        { x += dx; }
         for (int row = 0; row < _grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
             x += dx;
@@ -501,7 +496,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     // Create Filename
     std::string outputname =
-        _dict_name + '/' + _case_name + "_" + std::to_string(my_rank) + "." + std::to_string(timestep) + ".vtk";
+        _dict_name + '/' + _case_name + "_" + std::to_string(_my_rank) + "." + std::to_string(timestep) + ".vtk";
 
     writer->SetFileName(outputname.c_str());
     writer->SetInputData(structuredGrid);
