@@ -145,6 +145,7 @@ Matrix<double> &Fields::f_matrix() { return _F; }
 Matrix<double> &Fields::g_matrix() { return _G; }
 
 double Fields::dt() const { return _dt; }
+void Fields::set_dt(double dt) { _dt = dt; }
 double Fields::tau() const { return _tau; }
 double Fields::alpha() const { return _alpha; }
 double Fields::beta() const { return _beta; }

@@ -92,6 +92,7 @@ class Fields {
 
     /// get timestep size
     double dt() const;
+    void set_dt(double dt);
 
     /// get adaptive timestep coefficient (tau <= 0 means fixed dt)
     double tau() const;

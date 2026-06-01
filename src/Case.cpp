@@ -1,5 +1,6 @@
 #include <mpi.h>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -261,6 +262,9 @@ void Case::simulate() { // Inialize variables
     std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
               << std::endl;
 
+
+    // No intial halo communication is necesary since values are already read.
+
     // Initial ghost cells update to enforce BCs
     if (_energy_eq) {
         for (auto &boundary : _boundaries)
@@ -274,13 +278,11 @@ void Case::simulate() { // Inialize variables
     vtk_count++;
 
     // Loop over time
-    // Exchange parameter values before or after imposing the bc?
     while (t < _t_end) {
 
         // Step 1: Velocity BCs (ghost cells, moving lid)
         for (auto &boundary : _boundaries)
             boundary->applyVelocity(_field);
-        // Exchange velocity values
 
         // Step 2: Compute new temperature values (dependent on u and v) and apply BCs
         if (_energy_eq) {
@@ -289,6 +291,7 @@ void Case::simulate() { // Inialize variables
                 boundary->applyTemperature(_field);
             Communication::communicate_field(_field.t_matrix(), _grid.domain());
         }
+        // Halo values communication must happen after every field update. 
 
         // Step 3: Compute intermediate fluxes F and G (tilda) and their BCs
         _field.calculate_fluxes(_grid);
@@ -309,12 +312,20 @@ void Case::simulate() { // Inialize variables
         // Call SOR solve outputting the residual after solving the PPE
         while (iter < _max_iter && residual > _tolerance) {
             residual = _pressure_solver->solve(_field, _grid, _boundaries);
+
+            // square and de-normalize the local residual
+            const double local_residual_sum = residual * residual * static_cast<double>(_grid.fluid_cells().size());
+
+            // sum among processors
+            const double global_residual_sum = Communication::reduce_sum(local_residual_sum);
+            const double global_fluid_cells = Communication::reduce_sum(static_cast<double>(_grid.fluid_cells().size()));
+      
+            // re-normalize in global terms
+            residual = std::sqrt(global_residual_sum / global_fluid_cells);
             // Apply BCs on the pressure field
             for (auto &boundary : _boundaries)
                 boundary->applyPressure(_field);
             Communication::communicate_field(_field.p_matrix(), _grid.domain());
-            // Calculate the global residual (sum over all processor domains)
-            // MPI_Allreduce()
             ++iter;   
         }
         // Divergence check
@@ -332,8 +343,8 @@ void Case::simulate() { // Inialize variables
 
         // Step 7: Compute adaptive dt for the next timestep
         dt = _field.calculate_dt(_grid);
-        // Find flobal minimum time step
-        // MPI_MIN
+        dt = Communication::reduce_min(dt);
+        _field.set_dt(dt);
 
         // Update time, timestep and counter
         t += dt;
