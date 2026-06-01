@@ -10,7 +10,7 @@
 struct Domain {
 
 
-    // These indexes would only used for cell type assingment(?)
+    // These indexes would only used for cell type assingment
     /// Minimum x index including ghost cells
     int iminb{-1};
     /// Maximum x index including ghost cells

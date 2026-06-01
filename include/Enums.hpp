@@ -20,6 +20,7 @@ enum class border_position {
 
 enum class cell_type {
     FLUID,
+    FLUID_HALO,
     FIXED_WALL,
     MOVING_WALL,
     INFLOW,  // PGM value 1: Dirichlet velocity BC, Neumann pressure BC

@@ -61,8 +61,17 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
         for (int i_geom = _domain.iminb; i_geom <= _domain.imaxb; ++i_geom) {
             const int id = geometry_data.at(i_geom).at(j_geom);
             if (id == 0) {
-                _cells(i, j) = Cell(i, j, cell_type::FLUID);
-                _fluid_cells.push_back(&_cells(i, j));
+                // We make a distinction so that fluid halo cells are kept out of fluid 
+                // cells vector of pointers. This way they are not updated in the SOR, nor 
+                // actual boundary cells values are set taking them into account. 
+                const bool is_halo = (i == 0 || i == _domain.size_x + 1 || j == 0 || j == _domain.size_y + 1);
+                if (is_halo) {
+                    _cells(i, j) = Cell(i, j, cell_type::FLUID_HALO);
+                    _fluid_halo_cells.push_back(&_cells(i, j));
+                } else {
+                    _cells(i, j) = Cell(i, j, cell_type::FLUID);
+                    _fluid_cells.push_back(&_cells(i, j));
+                }
             } else if (id == 1) {
                 // Inflow cell (PGM value 1): Dirichlet velocity, Neumann pressure.
                 _cells(i, j) = Cell(i, j, cell_type::INFLOW, id);
@@ -227,6 +236,19 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
             }
         }
     }
+
+    auto remove_inactive_boundaries = [](std::vector<Cell *> &cells) {
+        // Remove if no borders, if this boundary cell does not touch any owned fluid cell.
+        // It may still touch FLUID_HALO, but that face is handled by the rank that owns that fluid cell.
+        cells.erase(std::remove_if(cells.begin(), cells.end(), [](const Cell *cell) { return cell->borders().empty(); }),
+                    cells.end());
+    };
+
+    // Apply the same cleanup to every boundary type before Boundary objects are created in Case.
+    remove_inactive_boundaries(_fixed_wall_cells);
+    remove_inactive_boundaries(_moving_wall_cells);
+    remove_inactive_boundaries(_inflow_cells);
+    remove_inactive_boundaries(_outflow_cells);
 }
 
 void Grid::parse_geometry_file(std::string filedoc, std::vector<std::vector<int>> &geometry_data) {
@@ -283,6 +305,8 @@ double Grid::dy() const { return _domain.dy; }
 const Domain &Grid::domain() const { return _domain; }
 
 const std::vector<Cell *> &Grid::fluid_cells() const { return _fluid_cells; }
+
+const std::vector<Cell *> &Grid::fluid_halo_cells() const { return _fluid_halo_cells; }
 
 const std::vector<Cell *> &Grid::fixed_wall_cells() const { return _fixed_wall_cells; }
 

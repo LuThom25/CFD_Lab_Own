@@ -53,6 +53,13 @@ class Grid {
     const std::vector<Cell *> &fluid_cells() const;
 
     /**
+     * @brief Access fluid halo cells owned by neighbouring ranks
+     *
+     * @param[out] vector of fluid halo cells
+     */
+    const std::vector<Cell *> &fluid_halo_cells() const;
+
+    /**
      * @brief Access moving wall cells
      *
      * @param[out] vector of moving wall cells
@@ -106,6 +113,8 @@ class Grid {
     Matrix<Cell> _cells;
     /// Vector of pointers to all fluid cells
     std::vector<Cell *> _fluid_cells;
+    /// Vector of pointers to all fluid halo cells
+    std::vector<Cell *> _fluid_halo_cells;
     /// Vector of pointers to all cells belonging to fixed walls
     std::vector<Cell *> _fixed_wall_cells;
     /// Vector of pointers to all cells belonging to moving walls

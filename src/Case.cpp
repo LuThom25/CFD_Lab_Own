@@ -438,7 +438,8 @@ void Case::output_vtk(int timestep, int my_rank) {
      *  Encode cell type as an integer per cell so ParaView can colour obstacles without
      *  needing a separate geometry file. Domain boundary ghost cells are omitted (loop
      *  starts at 1), matching the same range used for Pressure and Velocity above.
-     *  0 = FLUID, 1 = FIXED_WALL, 2 = MOVING_WALL, 3 = INFLOW, 4 = OUTFLOW
+     *  0 = FLUID, 1 = FIXED_WALL, 2 = MOVING_WALL, 3 = INFLOW, 4 = OUTFLOW,
+     *  5 = FLUID_HALO
      */
     vtkSmartPointer<vtkIntArray> Obstacle = vtkSmartPointer<vtkIntArray>::New();
     Obstacle->SetName("obstacle");
@@ -447,6 +448,9 @@ void Case::output_vtk(int timestep, int my_rank) {
         for (int i = 1; i < _grid.domain().size_x + 1; i++) {
             int flag = 0;
             switch (_grid.cells()(i, j).type()) {
+            case cell_type::FLUID_HALO:
+                flag = 5;
+                break;
             case cell_type::FIXED_WALL:
                 flag = 1;
                 break;
