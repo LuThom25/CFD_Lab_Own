@@ -243,7 +243,7 @@ void Case::set_file_names(std::string file_name) {
  * - Apply Flux boundary conditions using applyFlux()
  * - Calculate right-hand-side of PPE using calculate_rs() member function of Fields class
  * - Iterate the pressure poisson equation until the residual becomes smaller than the desired tolerance
- *   or the maximum number of the iterations are performed using solve() member function of PressureSolver
+ *   or the maximum number of the iterations is reached
  * - Update pressure boundary conditions after each iteration of the SOR solver
  * - Calculate the velocities u and v using calculate_velocities() member function of Fields class
  * - calculate the maximal timestep size for the next iteration using calculate_dt() member function of Fields class
@@ -323,7 +323,14 @@ void Case::simulate() { // Inialize variables
         double residual = std::numeric_limits<double>::max();
         // Call SOR solve outputting the residual after solving the PPE
         while (iter < _max_iter && residual > _tolerance) {
-            residual = _pressure_solver->solve(_field, _grid, _boundaries);
+            _pressure_solver->iterate(_field, _grid);
+
+            // Apply BCs on the pressure field, then exchange pressure halos before residual calculation.
+            for (auto &boundary : _boundaries)
+                boundary->applyPressure(_field);
+            Communication::communicate_field(_field.p_matrix(), _grid.domain());
+
+            residual = _pressure_solver->calculate_residual(_field, _grid);
 
             // square and de-normalize the local residual
             const double local_residual_sum = residual * residual * static_cast<double>(_grid.fluid_cells().size());
@@ -334,10 +341,6 @@ void Case::simulate() { // Inialize variables
       
             // re-normalize in global terms
             residual = std::sqrt(global_residual_sum / global_fluid_cells);
-            // Apply BCs on the pressure field
-            for (auto &boundary : _boundaries)
-                boundary->applyPressure(_field);
-            Communication::communicate_field(_field.p_matrix(), _grid.domain());
             ++iter;   
         }
         // Divergence check

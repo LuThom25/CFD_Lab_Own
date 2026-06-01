@@ -5,8 +5,7 @@
 
 SOR_Standard::SOR_Standard(double omega) : _omega(omega) {}
 
-double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> & /*boundaries*/) {
-
+void SOR_Standard::iterate(Fields &field, Grid &grid) {
     double dx = grid.dx();
     double dy = grid.dy();
 
@@ -22,7 +21,9 @@ double SOR_Standard::solve(Fields &field, Grid &grid, const std::vector<std::uni
         field.p(i, j) = (1.0 - _omega) * field.p(i, j) +
                         coeff * (Discretization::sor_helper(field.p_matrix(), i, j) - field.rs(i, j));
     }
+}
 
+double SOR_Standard::calculate_residual(Fields &field, Grid &grid) {
     double res = 0.0;  // residual initialization
     double rloc = 0.0; // accumulates val^2 for every cell
 
