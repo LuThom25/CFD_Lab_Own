@@ -21,6 +21,7 @@ namespace filesystem = std::filesystem;
 #include <vtkTuple.h>
 
 #include "Case.hpp"
+#include "Communication.hpp"
 #include "Enums.hpp"
 
 Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int my_rank) { // added size and rank 
@@ -286,14 +287,15 @@ void Case::simulate() { // Inialize variables
             _field.calculate_temperature(_grid);
             for (auto &boundary : _boundaries)
                 boundary->applyTemperature(_field);
+            Communication::communicate_field(_field.t_matrix(), _grid.domain());
         }
-        // Exchange temperatuer values
 
         // Step 3: Compute intermediate fluxes F and G (tilda) and their BCs
         _field.calculate_fluxes(_grid);
         for (auto &boundary : _boundaries)
             boundary->applyFlux(_field);
-        // Exchange F and G values
+        Communication::communicate_field(_field.f_matrix(), _grid.domain());
+        Communication::communicate_field(_field.g_matrix(), _grid.domain());
 
         // Step 4: Calculate the RHS of pressure Poisson equation
         _field.calculate_rs(_grid);
@@ -310,7 +312,7 @@ void Case::simulate() { // Inialize variables
             // Apply BCs on the pressure field
             for (auto &boundary : _boundaries)
                 boundary->applyPressure(_field);
-            // Exchange pressure values
+            Communication::communicate_field(_field.p_matrix(), _grid.domain());
             // Calculate the global residual (sum over all processor domains)
             // MPI_Allreduce()
             ++iter;   
@@ -325,6 +327,8 @@ void Case::simulate() { // Inialize variables
 
         // Step 6: Correct velocities using updated pressure
         _field.calculate_velocities(_grid);
+        Communication::communicate_field(_field.u_matrix(), _grid.domain());
+        Communication::communicate_field(_field.v_matrix(), _grid.domain());
 
         // Step 7: Compute adaptive dt for the next timestep
         dt = _field.calculate_dt(_grid);
