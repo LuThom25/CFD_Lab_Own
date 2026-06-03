@@ -74,23 +74,24 @@ void Communication::communicate_field(Matrix<double> &field, const Domain &domai
                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
     
-    // Send right and receive left
+    // Send right and receive left.
+    // Vertical exchange has already updated top/bottom ghost rows, so exchanging
+    // full columns here also propagates diagonal halo corners for 2D decompositions.
     if (domain.left_physical && !domain.right_physical) {
         std::vector<double> col_vec = field.get_col(n_col - 2);
-        MPI_Send(col_vec.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD);
+        MPI_Send(col_vec.data(), n_row, MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD);
     }
     if (domain.right_physical && !domain.left_physical) {
         std::vector<double> col_vec(n_row, 0);
-        MPI_Recv(col_vec.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+        MPI_Recv(col_vec.data(), n_row, MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         field.set_col(col_vec, 0);
     }
     if (!domain.left_physical && !domain.right_physical) {
         std::vector<double> col_vec_send = field.get_col(n_col - 2);
         std::vector<double> col_vec_receive(n_row, 0);
 
-        MPI_Sendrecv(col_vec_send.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_right, 0,
-                     col_vec_receive.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD,
+        MPI_Sendrecv(col_vec_send.data(), n_row, MPI_DOUBLE, domain.rank_right, 0,
+                     col_vec_receive.data(), n_row, MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
         field.set_col(col_vec_receive, 0);
     }
@@ -98,20 +99,19 @@ void Communication::communicate_field(Matrix<double> &field, const Domain &domai
     // Send left and receive right
     if (!domain.left_physical && domain.right_physical) {
         std::vector<double> col_vec = field.get_col(1);
-        MPI_Send(col_vec.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD);
+        MPI_Send(col_vec.data(), n_row, MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD);
     }
     if (!domain.right_physical && domain.left_physical) {
         std::vector<double> col_vec(n_row, 0);
-        MPI_Recv(col_vec.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+        MPI_Recv(col_vec.data(), n_row, MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         field.set_col(col_vec, n_col - 1);
     }
     if (!domain.left_physical && !domain.right_physical) {
         std::vector<double> col_vec_send = field.get_col(1);
         std::vector<double> col_vec_receive(n_row, 0);
 
-        MPI_Sendrecv(col_vec_send.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_left, 0,
-                     col_vec_receive.data() + 1, n_row - 2, MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD,
+        MPI_Sendrecv(col_vec_send.data(), n_row, MPI_DOUBLE, domain.rank_left, 0,
+                     col_vec_receive.data(), n_row, MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD,
                      MPI_STATUS_IGNORE);
         field.set_col(col_vec_receive, n_col - 1);
     }

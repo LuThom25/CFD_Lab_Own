@@ -59,7 +59,9 @@ void Fields::calculate_rs(Grid &grid) {
         double sum = 0.0;
         for (auto cell : cells)
             sum += _RS(cell->i(), cell->j());
-        const double mean = sum / static_cast<double>(N);
+        const double global_sum = Communication::reduce_sum(sum);
+        const double global_n = Communication::reduce_sum(static_cast<double>(N));
+        const double mean = global_sum / global_n;
         for (auto cell : cells)
             _RS(cell->i(), cell->j()) -= mean;
     }
