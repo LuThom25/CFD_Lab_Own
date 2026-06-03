@@ -214,8 +214,9 @@ void Case::set_file_names(std::string file_name) {
     _prefix = fp.parent_path().string();
     if (!_prefix.empty()) _prefix += '/';
 
-    // Output directory: <parent>/<case_name>_Output
-    filesystem::path output_dir = fp.parent_path() / (_case_name + "_Output");
+    // Output directory: <parent>/<case_name>_Output_<iproc>_<jproc>
+    filesystem::path output_dir =
+        fp.parent_path() / (_case_name + "_Output_" + std::to_string(_iproc) + "_" + std::to_string(_jproc));
     _dict_name = output_dir.string();
 
     // Prepend parent directory to geometry file path if one was specified.
