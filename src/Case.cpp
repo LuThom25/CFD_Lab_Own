@@ -267,6 +267,16 @@ void Case::simulate() { // Inialize variables
         std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
                   << std::endl;
 
+    // Open CSV log for SOR iterations per timestep (rank 0 only)
+    std::ofstream sor_log;
+    if (_my_rank == 0) {
+        sor_log.open(_dict_name + "/sor_log.csv");
+        sor_log << "timestep,t,sor_iters,residual\n";
+    }
+
+    // Wall-clock timer starts here (after setup, before time loop)
+    const double t_wall_start = MPI_Wtime();
+
 
 
     // Halo values communication must happen after every field update. Both 
@@ -344,9 +354,14 @@ void Case::simulate() { // Inialize variables
             residual = std::sqrt(global_residual_sum / global_fluid_cells);
             ++iter;   
         }
+        // Log SOR iterations for this timestep
+        if (_my_rank == 0)
+            sor_log << timestep + 1 << "," << std::fixed << std::setprecision(6) << t + dt
+                    << "," << iter << "," << std::scientific << std::setprecision(6) << residual << "\n";
+
         // Divergence check
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
-            ++timestep; // count this step so avg_sor = total_iter / total_steps is bounded by itermax
+            ++timestep;
             if (_my_rank == 0)
                 std::cout << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t << "  step=" << timestep
                           << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n";
@@ -368,6 +383,11 @@ void Case::simulate() { // Inialize variables
         ++timestep;
         output_counter += dt;
 
+        // Progress output every 500 timesteps so long runs can be monitored
+        if (_my_rank == 0 && timestep % 500 == 0)
+            std::cout << "  step=" << timestep << "  t=" << std::fixed << std::setprecision(4) << t
+                      << "  dt=" << std::scientific << std::setprecision(2) << dt << "\n";
+
         // Step 8: VTK output
         // only output when enough simulated time has passed to avoid having thousands of ouput vtk
         if (output_counter >= _output_freq) {
@@ -377,9 +397,19 @@ void Case::simulate() { // Inialize variables
         }
     }
 
-    if (_my_rank == 0)
+    const double t_wall = MPI_Wtime() - t_wall_start;
+
+    if (_my_rank == 0) {
+        sor_log.close();
         std::cout << "Finished simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
                   << std::endl;
+        std::cout << "Wall time: " << std::fixed << std::setprecision(2) << t_wall << " s  ("
+                  << _iproc << "x" << _jproc << " = " << _iproc * _jproc << " ranks)\n";
+
+        // Write wall time to a separate file for easy collection
+        std::ofstream wt(_dict_name + "/walltime.txt");
+        wt << t_wall << "\n";
+    }
 }
 
 void Case::output_vtk(int timestep) {
