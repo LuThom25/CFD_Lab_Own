@@ -258,7 +258,6 @@ void Case::simulate() { // Inialize variables
     double t = 0.0;
     double dt = _field.dt();
     int timestep = 0;
-    int vtk_count = 0;
     double output_counter = 0.0;
 
     if (_my_rank == 0)
@@ -282,7 +281,6 @@ void Case::simulate() { // Inialize variables
     Communication::communicate_field(_field.p_matrix(), _grid.domain());
 
     output_vtk(timestep);
-    vtk_count++;
 
     // Loop over time
     while (t < _t_end) {
@@ -366,7 +364,6 @@ void Case::simulate() { // Inialize variables
         // only output when enough simulated time has passed to avoid having thousands of ouput vtk
         if (output_counter >= _output_freq) {
             output_vtk(timestep);
-            vtk_count++;
             output_counter -= _output_freq;
         }
     }
