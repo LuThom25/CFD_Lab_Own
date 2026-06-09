@@ -28,11 +28,20 @@ find_package(VTK REQUIRED)
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
 include(${VTK_USE_FILE})
 
+# OpenMP
+find_package(OpenMP)
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(fluidchen PRIVATE OpenMP::OpenMP_CXX)
+else()
+    message(WARNING "OpenMP not found, parallelization will be disabled.")
+endif()
+
 # Add include directory
 target_include_directories(fluidchen PUBLIC include)
 
 # Add Compiler warnings (Try to write clean code!)
-target_compile_options(fluidchen PRIVATE -Wall -Wextra)
+target_compile_options(fluidchen PRIVATE -Wall -Wextra -Wconversion)
 
 # if you use external libraries you have to link them like
 target_link_libraries(fluidchen PRIVATE MPI::MPI_CXX)

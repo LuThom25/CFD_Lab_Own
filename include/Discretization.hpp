@@ -43,6 +43,7 @@ class Discretization {
      */
     static double convection_v(const Matrix<double> &U, const Matrix<double> &V, int i, int j);
 
+    static double convection_T(const Matrix<double> &T, const Matrix<double> &U, const Matrix<double> &V, int i, int j);
     /**
      * @brief Laplacian term discretization using central difference
      *
@@ -83,4 +84,9 @@ class Discretization {
     static double _dx;
     static double _dy;
     static double _gamma;
+    // P3: precomputed reciprocals avoid repeated division in every stencil call.
+    static double _dx2_inv; ///< 1.0 / (dx * dx)
+    static double _dy2_inv; ///< 1.0 / (dy * dy)
+    static double _dx_inv;
+    static double _dy_inv;
 };

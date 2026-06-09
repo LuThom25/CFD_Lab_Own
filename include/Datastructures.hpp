@@ -1,16 +1,18 @@
 #pragma once
 
+#include "Util.hpp"
+
 #include <vector>
 
 /**
- * @brief General 2D data structure around std::vector, in column
+ * @brief General 2D data structure around std::vector, in row
  * major format.
  *
  */
 template <typename T> class Matrix {
 
   public:
-    Matrix<T>() = default;
+    Matrix() = default;
 
     /**
      * @brief Constructor with initial value
@@ -20,7 +22,7 @@ template <typename T> class Matrix {
      * @param[in] initial value for the elements
      *
      */
-    Matrix<T>(int num_cols, int num_rows, double init_val) : _num_cols(num_cols), _num_rows(num_rows) {
+    Matrix(int num_cols, int num_rows, double init_val) : _num_cols(num_cols), _num_rows(num_rows) {
         _container.resize(num_cols * num_rows);
         std::fill(_container.begin(), _container.end(), init_val);
     }
@@ -32,12 +34,12 @@ template <typename T> class Matrix {
      * @param[in] number of elements in y direction
      *
      */
-    Matrix<T>(int num_cols, int num_rows) : _num_cols(num_cols), _num_rows(num_rows) {
+    Matrix(int num_cols, int num_rows) : _num_cols(num_cols), _num_rows(num_rows) {
         _container.resize(num_cols * num_rows);
     }
 
     /**
-     * @brief Element access and modify using index
+     * @brief Element access and modify using index (bounds-checked via std::vector::at)
      *
      * @param[in] x index
      * @param[in] y index
@@ -46,7 +48,7 @@ template <typename T> class Matrix {
     T &operator()(int i, int j) { return _container.at(_num_cols * j + i); }
 
     /**
-     * @brief Element access using index
+     * @brief Element access using index (bounds-checked via std::vector::at)
      *
      * @param[in] x index
      * @param[in] y index
@@ -55,11 +57,25 @@ template <typename T> class Matrix {
     T operator()(int i, int j) const { return _container.at(_num_cols * j + i); }
 
     /**
+     * @brief Unchecked element access for performance-critical hot loops (P2).
+     *
+     * Uses operator[] instead of at(), so no bounds check is performed.
+     * The caller must guarantee 0 <= i < num_cols() and 0 <= j < num_rows().
+     *
+     * @param[in] x index
+     * @param[in] y index
+     * @param[out] reference / value of the element
+     */
+    HOT INLINE NOTHROW inline T &fast(int i, int j) { return _container[_num_cols * j + i]; }
+    HOT INLINE NOTHROW inline T fast(int i, int j) const { return _container[_num_cols * j + i]; }
+
+    /**
      * @brief Pointer representation of underlying data
      *
      * @param[out] pointer to the beginning of the vector
      */
     const T *data() const { return _container.data(); }
+    T *data() { return _container.data(); }
 
     /**
      * @brief Access of the size of the structure
@@ -68,8 +84,8 @@ template <typename T> class Matrix {
      */
     int size() const { return _container.size(); }
 
-    /// get the given row of the matrix
-    std::vector<double> get_row(int row) {
+    /// get the given row of the matrix (CQ3: const — does not modify the matrix)
+    std::vector<double> get_row(int row) const {
         std::vector<T> row_data(_num_cols, -1);
         for (int i = 0; i < _num_cols; ++i) {
             row_data.at(i) = _container.at(i + _num_cols * row);
@@ -77,8 +93,8 @@ template <typename T> class Matrix {
         return row_data;
     }
 
-    /// get the given column of the matrix
-    std::vector<double> get_col(int col) {
+    /// get the given column of the matrix (CQ3: const — does not modify the matrix)
+    std::vector<double> get_col(int col) const {
         std::vector<T> col_data(_num_rows, -1);
         for (int i = 0; i < _num_rows; ++i) {
             col_data.at(i) = _container.at(col + i * _num_cols);
@@ -105,6 +121,9 @@ template <typename T> class Matrix {
 
     /// get the number of elements in y direction
     int num_rows() const { return _num_rows; }
+
+    /// get a pointer to the underlying vector
+    std::vector<T> *container() { return &_container; }
 
   private:
     /// Number of elements in x direction

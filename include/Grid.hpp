@@ -10,6 +10,7 @@
 #include "Datastructures.hpp"
 #include "Domain.hpp"
 #include "Enums.hpp"
+#include "Util.hpp"
 
 /**
  * @brief Data structure holds cells and related sub-containers
@@ -52,6 +53,13 @@ class Grid {
     const std::vector<Cell *> &fluid_cells() const;
 
     /**
+     * @brief Access fluid halo cells owned by neighbouring ranks
+     *
+     * @param[out] vector of fluid halo cells
+     */
+    const std::vector<Cell *> &fluid_halo_cells() const;
+
+    /**
      * @brief Access moving wall cells
      *
      * @param[out] vector of moving wall cells
@@ -64,6 +72,29 @@ class Grid {
      * @param[out] vector of fixed wall cells
      */
     const std::vector<Cell *> &fixed_wall_cells() const;
+
+    /**
+     * @brief Access inflow cells (PGM value 1).
+     * Used by Patrick to construct InFlowBoundary.
+     *
+     * @param[out] vector of inflow cells
+     */
+    const std::vector<Cell *> &inflow_cells() const;
+
+    /**
+     * @brief Access outflow cells (PGM value 2).
+     * Used by Patrick to construct OutFlowBoundary.
+     *
+     * @param[out] vector of outflow cells
+     */
+    const std::vector<Cell *> &outflow_cells() const;
+
+    /**
+     * @brief Access to all cells (including ghost cells)
+     *
+     * @param[out] matrix of all cells
+     */
+    Matrix<Cell> &cells();
 
   private:
     /**@brief Default lid driven cavity case generator
@@ -82,10 +113,16 @@ class Grid {
     Matrix<Cell> _cells;
     /// Vector of pointers to all fluid cells
     std::vector<Cell *> _fluid_cells;
+    /// Vector of pointers to all fluid halo cells
+    std::vector<Cell *> _fluid_halo_cells;
     /// Vector of pointers to all cells belonging to fixed walls
     std::vector<Cell *> _fixed_wall_cells;
     /// Vector of pointers to all cells belonging to moving walls
     std::vector<Cell *> _moving_wall_cells;
+    /// Vector of pointers to all inflow cells (PGM value 1)
+    std::vector<Cell *> _inflow_cells;
+    /// Vector of pointers to all outflow cells (PGM value 2)
+    std::vector<Cell *> _outflow_cells;
 
     /// Domain object holding geometrical information
     Domain _domain;

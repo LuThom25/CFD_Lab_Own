@@ -1,10 +1,14 @@
+# Ignore build and cache directories
+/*build*/
+/*cache*/
+/*local*/
+
+# Ignore output files and logs
 *_Output
 *.vtk
 *.exe
 *~
 *.log
-build
-.vscode
 *.DS_STORE
 CMakeFiles
 Makefile
@@ -17,3 +21,5 @@ compile_commands.json
 .idea
 cmake-build-*
 *.sw*
+*.vscode/
+venv/

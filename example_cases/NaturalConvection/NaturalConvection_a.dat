@@ -1,8 +1,13 @@
 #--------------------------------------------
-#            size of the domain
+#           geometry file            
 #--------------------------------------------
-xlength      1
-ylength      1
+geo_file     NaturalConvection.pgm
+
+#--------------------------------------------
+#            size of the domain             
+#--------------------------------------------
+xlength      1.0
+ylength      1.0
 
 #--------------------------------------------
 #            number of cells
@@ -17,58 +22,67 @@ jmax         50
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end        50.0
+t_end        1000.0
 tau          0.5
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     0.5
+dt_value     10.0
 
 #--------------------------------------------
 #               pressure
-# itermax: maximum number of pressure iterations
-# eps: tolerance for pressure iteration (residual < eps)
-# omg: relaxation factor for SOR
-# gamma: upwind differencing factor
 #--------------------------------------------
 itermax      100
-eps          0.001
+eps          0.00001
 omg          1.7
 gamma        0.5
 
 #--------------------------------------------
-#               solver
-# Select the pressure Poisson solver:
-#   SOR_MEAN_CORRECTION - Successive Over-Relaxation (Thomas, with zero-mean projection)
-#   SOR_RB    - Red-Black SOR (checkerboard pattern, parallelisation-ready)
-#   SOR_STANDARD - Standard SOR by Iciar (no mean correction)
-# Default if omitted: SOR_MEAN_CORRECTION
+#         kinematic viscosity
 #--------------------------------------------
-solver       SOR_STANDARD
+nu           0.001
 
 #--------------------------------------------
-#     kinematic viscosity
-#--------------------------------------------
-nu           0.01
-
-#--------------------------------------------
-#        gravity / external forces
+#        gravity
 #--------------------------------------------
 GX           0.0
-GY           0.0
+GY           -1.1
 
 #--------------------------------------------
 #         initial pressure
 #--------------------------------------------
-PI          0.0
+PI           0.0
 
 #--------------------------------------------
-#         initial velocities
+#       initial velocity
 #--------------------------------------------
-UI          0.0
-VI          0.0
+UI           0.0
+VI           0.0
+
+#--------------------------------------------
+#          energy
+# TI:     initial temperature
+# beta:   thermal expansion coefficient
+# alpha:  thermal diffusivity (nu/Pr)
+#--------------------------------------------
+energy_eq    on
+TI           0
+beta         0.00021
+alpha        0.000142857
+
+#--------------------------------------------
+#          wall clusters
+# num_of_walls:     number of walls
+# wall_temp<num>    wall temperature
+# - enter -1 for adiabatic wall
+#--------------------------------------------
+num_walls    3
+
+wall_temp_3  -1
+wall_temp_4  1.0
+wall_temp_5  0.0
 
 #--------------------------------------------
 #          parallelization

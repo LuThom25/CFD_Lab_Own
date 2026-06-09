@@ -1,13 +1,18 @@
 #--------------------------------------------
-#            size of the domain
+#           geometry file            
 #--------------------------------------------
-xlength      1
-ylength      1
+geo_file     FluidTrap_reversed.pgm
+
+#--------------------------------------------
+#            size of the domain             
+#--------------------------------------------
+xlength      2.0
+ylength      1.0
 
 #--------------------------------------------
 #            number of cells
 #--------------------------------------------
-imax         50
+imax         100
 jmax         50
 
 #--------------------------------------------
@@ -17,14 +22,14 @@ jmax         50
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end        50.0
-tau          0.5
+t_end        2000.0
+tau          0.2
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     0.5
+dt_value     10.0
 
 #--------------------------------------------
 #               pressure
@@ -33,42 +38,54 @@ dt_value     0.5
 # omg: relaxation factor for SOR
 # gamma: upwind differencing factor
 #--------------------------------------------
-itermax      100
-eps          0.001
+itermax      1000
+eps          0.0001
 omg          1.7
-gamma        0.5
+gamma        0.7
 
 #--------------------------------------------
-#               solver
-# Select the pressure Poisson solver:
-#   SOR_MEAN_CORRECTION - Successive Over-Relaxation (Thomas, with zero-mean projection)
-#   SOR_RB    - Red-Black SOR (checkerboard pattern, parallelisation-ready)
-#   SOR_STANDARD - Standard SOR by Iciar (no mean correction)
-# Default if omitted: SOR_MEAN_CORRECTION
+#       kinematic viscosity
 #--------------------------------------------
-solver       SOR_STANDARD
-
-#--------------------------------------------
-#     kinematic viscosity
-#--------------------------------------------
-nu           0.01
+nu           0.0001
 
 #--------------------------------------------
 #        gravity / external forces
 #--------------------------------------------
 GX           0.0
-GY           0.0
+GY           -9.81
 
 #--------------------------------------------
 #         initial pressure
 #--------------------------------------------
-PI          0.0
+PI           0.0
 
 #--------------------------------------------
-#         initial velocities
+#       initial velocity
 #--------------------------------------------
-UI          0.0
-VI          0.0
+UI           0.0
+VI           0.0
+
+#--------------------------------------------
+#          energy
+# TI:     initial temperature
+# beta:   thermal expansion coefficient
+# alpha:  thermal diffusivity (nu/Pr)
+#--------------------------------------------
+energy_eq    on
+TI           0.0
+beta         0.00063
+alpha        0.00001429
+
+#--------------------------------------------
+#          wall clusters
+# num_of_walls:     number of walls
+# wall_temp<num>    wall temperature
+# - enter -1 for adiabatic wall
+#--------------------------------------------
+num_walls    3
+wall_temp_3  -1
+wall_temp_4  0.5
+wall_temp_5  -0.5
 
 #--------------------------------------------
 #          parallelization

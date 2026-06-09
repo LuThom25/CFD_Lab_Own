@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <vector>
 
 #include "Cell.hpp"
@@ -17,25 +18,70 @@ class Boundary {
      *
      * @param[in] Field to be applied
      */
-    virtual void applyVelocity(Fields &field) = 0;
+    void applyVelocity(Fields &field);
+
+    /**
+     * @brief Method to patch the velocity boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyVelocityToCell(Fields &field, Cell *cell) = 0;
 
     /**
      * @brief Method to patch the pressure boundary conditions to the given field.
      *
      * @param[in] Field to be applied
      */
-    virtual void applyPressure(Fields &field) = 0;
+    void applyPressure(Fields &field);
+
+    /**
+     * @brief Method to patch the pressure boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyPressureToCell(Fields &field, Cell *cell) = 0;
 
     /**
      * @brief Method to patch the flux (F & G) boundary conditions to the given field.
      *
      * @param[in] Field to be applied
      */
-    virtual void applyFlux(Fields &field);
+    void applyFlux(Fields &field);
 
+    /**
+     * @brief Method to patch the flux (F & G) boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyFluxToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell) {};
+
+    /**
+     * @brief Method to patch the temperature boundary conditions to the given field.
+     *
+     * @param[in] Field to be applied
+     */
+    void applyTemperature(Fields &field);
+
+    /**
+     * @brief Method to patch the temperature boundary conditions to the given field for a specific cell.
+     *
+     * @param[in] Field to be applied
+     * @param[in] Cell to which the boundary condition is applied
+     */
+    virtual void applyTemperatureToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell) {};
+
+    /**
+     * @brief Virtual destructor for the boundary class.
+     */
     virtual ~Boundary() = default;
 
   protected:
+    /**
+     * @brief Constructor for the boundary class.
+     */
     Boundary(std::vector<Cell *> cells);
     std::vector<Cell *> _cells;
 };
@@ -48,9 +94,15 @@ class FixedWallBoundary : public Boundary {
   public:
     FixedWallBoundary(std::vector<Cell *> cells);
     FixedWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_temperature);
-    virtual ~FixedWallBoundary() = default;
-    virtual void applyVelocity(Fields &field);
-    virtual void applyPressure(Fields &field);
+    ~FixedWallBoundary() = default;
+
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
+
+    void applyPressureToCell(Fields &field, Cell *cell) override;
+
+    void applyTemperatureToCell(Fields &field, Cell *cell) override;
+
+    void applyFluxToCell(Fields &field, Cell *cell) override;
 
   private:
     std::map<int, double> _wall_temperature;
@@ -64,13 +116,56 @@ class FixedWallBoundary : public Boundary {
 class MovingWallBoundary : public Boundary {
   public:
     MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity);
+    MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity, std::map<int, double> wall_temperature);
     MovingWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_velocity,
                        std::map<int, double> wall_temperature);
-    virtual ~MovingWallBoundary() = default;
-    virtual void applyVelocity(Fields &field);
-    virtual void applyPressure(Fields &field);
+    ~MovingWallBoundary() = default;
+
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
+
+    void applyPressureToCell(Fields &field, Cell *cell) override;
+
+    void applyFluxToCell(Fields &field, Cell *cell) override;
+
+    void applyTemperatureToCell(Fields &field, Cell *cell) override;
 
   private:
     std::map<int, double> _wall_velocity;
     std::map<int, double> _wall_temperature;
+};
+
+/**
+ * @brief Inflow boundary condition for the outer boundaries of the domain.
+ * Dirichlet for velocities, Neumann for pressure
+ */
+class InFlowBoundary : public Boundary {
+  public:
+    InFlowBoundary(std::vector<Cell *> cells, double u_in, double v_in);
+    ~InFlowBoundary() = default;
+
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
+
+    void applyPressureToCell(Fields &field, Cell *cell) override;
+
+    void applyFluxToCell(Fields &field, Cell *cell) override;
+
+  private:
+    double _u_in;
+    double _v_in;
+};
+
+/**
+ * @brief Outflow boundary condition for the outer boundaries of the domain.
+ * Neumann for velocities, Dirichlet(0) for pressure
+ */
+class OutFlowBoundary : public Boundary {
+  public:
+    OutFlowBoundary(std::vector<Cell *> cells);
+    ~OutFlowBoundary() = default;
+
+    void applyVelocityToCell(Fields &field, Cell *cell) override;
+
+    void applyPressureToCell(Fields &field, Cell *cell) override;
+
+    void applyFluxToCell(Fields &field, Cell *cell) override;
 };

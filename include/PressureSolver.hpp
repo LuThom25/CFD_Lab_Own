@@ -15,42 +15,31 @@ class PressureSolver {
     PressureSolver() = default;
     virtual ~PressureSolver() = default;
 
-    /**
-     * @brief Solve the pressure equation on given field, grid and boundary
-     *
-     * @param[in] field to be used
-     * @param[in] grid to be used
-     * @param[in] boundary to be used
-     */
-    virtual double solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries) = 0;
+    virtual void iterate(Fields &field, Grid &grid) = 0;
+    virtual double calculate_residual(Fields &field, Grid &grid) = 0;
 };
 
 /**
- * @brief Successive Over-Relaxation algorithm for solution of pressure Poisson
- * equation
+ * @brief Standard SOR without null-space correction.
  *
+ * Iciar's implementation. Plain SOR sweep followed by L2-norm residual
+ * computation. No mean subtraction applied.
  */
-class SOR : public PressureSolver {
+class SOR_Standard : public PressureSolver {
   public:
-    SOR() = default;
+    SOR_Standard() = default;
 
     /**
-     * @brief Constructor of SOR solver
+     * @brief Constructor of SOR_Standard solver
      *
-     * @param[in] relaxation factor
+     * @param[in] omega  SOR relaxation factor
      */
-    SOR(double omega);
+    SOR_Standard(double omega);
 
-    virtual ~SOR() = default;
+    virtual ~SOR_Standard() = default;
 
-    /**
-     * @brief Solve the pressure equation on given field, grid and boundary
-     *
-     * @param[in] field to be used
-     * @param[in] grid to be used
-     * @param[in] boundary to be used
-     */
-    virtual double solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries);
+    void iterate(Fields &field, Grid &grid) override;
+    double calculate_residual(Fields &field, Grid &grid) override;
 
   private:
     double _omega;
