@@ -6,10 +6,10 @@
 
 int main(int argn, char **args) {
     Communication::init_parallel(argn, args); // Initialize MPI
-    
+
     if (argn > 1) {
         std::string file_name{args[1]};
-        // Need to pass to the constructor: size and my_rank, to know which 
+        // Need to pass to the constructor: size and my_rank, to know which
         // subdomain it owns and who its neighbohrs are
         Case problem(file_name, argn, args, Communication::get_size(), Communication::get_rank());
         problem.simulate();
@@ -21,5 +21,4 @@ int main(int argn, char **args) {
         }
     }
     Communication::finalize(); // Finalize MPI
-    
 }

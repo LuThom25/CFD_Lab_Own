@@ -1,4 +1,3 @@
-#include <mpi.h>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -7,6 +6,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <mpi.h>
 #include <vector>
 
 namespace filesystem = std::filesystem;
@@ -25,7 +25,7 @@ namespace filesystem = std::filesystem;
 #include "Communication.hpp"
 #include "Enums.hpp"
 
-Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int my_rank) { // added size and rank 
+Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int my_rank) { // added size and rank
     // Assign MPI members
     _size = size;
     _my_rank = my_rank;
@@ -125,23 +125,22 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
         }
         // Enable/disable the communication steps
         // This allows the code to work both in serial and parallel (default set to serial run)
-        if (_size > 1){
+        if (_size > 1) {
             _parallel = true; // parallel
         }
         // Check for any invalid user input
         // 1. We should input value divisions of the domain
-        // 2. The total number of processes in the whole domain (size) should match 
+        // 2. The total number of processes in the whole domain (size) should match
         //    the total divisions of the domain (iproc * jproc)
-        if (_iproc <= 0 || _jproc <= 0){
+        if (_iproc <= 0 || _jproc <= 0) {
             if (_my_rank == 0)
                 std::cout << "Error: invalid user input for iproc or jproc. Values less than or equal to 0. \n";
             MPI_Finalize(); // Finalize before exiting the program
-            exit(1);        // Terminate the program 
-        }else if (_iproc * _jproc != _size){
-            if (_my_rank == 0)
-                std::cout << "Error: invalid user input for iproc or jproc. Sizes dont match. \n";
-            MPI_Finalize(); 
-            exit(1); 
+            exit(1);        // Terminate the program
+        } else if (_iproc * _jproc != _size) {
+            if (_my_rank == 0) std::cout << "Error: invalid user input for iproc or jproc. Sizes dont match. \n";
+            MPI_Finalize();
+            exit(1);
         }
     }
     file.close();
@@ -197,7 +196,6 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
     if (not _grid.outflow_cells().empty()) {
         _boundaries.push_back(std::make_unique<OutFlowBoundary>(_grid.outflow_cells()));
     }
-
 }
 
 void Case::set_file_names(std::string file_name) {
@@ -267,12 +265,10 @@ void Case::simulate() { // Inialize variables
         std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
                   << std::endl;
 
-
-
-    // Halo values communication must happen after every field update. Both 
+    // Halo values communication must happen after every field update. Both
     // explicit ones and every SOR iteration.
     // After BC enforcement we also communicate halos since it is still a field update.
-    // Boundary cells in the halos have  been updated. 
+    // Boundary cells in the halos have  been updated.
 
     // Initial ghost cells update to enforce BCs
     if (_energy_eq) {
@@ -284,7 +280,6 @@ void Case::simulate() { // Inialize variables
     for (auto &boundary : _boundaries)
         boundary->applyPressure(_field);
     Communication::communicate_field(_field.p_matrix(), _grid.domain());
-
 
     output_vtk(timestep);
     vtk_count++;
@@ -316,8 +311,6 @@ void Case::simulate() { // Inialize variables
         // Step 4: Calculate the RHS of pressure Poisson equation
         _field.calculate_rs(_grid);
 
-
-
         // Step 5: SOR pressure solve: iterate until res < eps or itermax reached
         // Initialize SOR stopping criteria
         int iter = 0;
@@ -338,11 +331,12 @@ void Case::simulate() { // Inialize variables
 
             // sum among processors
             const double global_residual_sum = Communication::reduce_sum(local_residual_sum);
-            const double global_fluid_cells = Communication::reduce_sum(static_cast<double>(_grid.fluid_cells().size()));
-      
+            const double global_fluid_cells =
+                Communication::reduce_sum(static_cast<double>(_grid.fluid_cells().size()));
+
             // re-normalize in global terms
             residual = std::sqrt(global_residual_sum / global_fluid_cells);
-            ++iter;   
+            ++iter;
         }
         // Divergence check
         if (std::isnan(residual) || std::isinf(residual) || residual > 1.0e8) {
@@ -516,81 +510,80 @@ void Case::output_vtk(int timestep) {
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain, int my_rank) {
     // imax_domain is the non-decomposed domain number of cells without ghosts
 
-
     /* The rank numbering is assigned by MPI, going left to right, bottom to top.
-    *  We need to locate this rank within the global (whole) domain in terms of its x,y position. 
-    *  e.g. if we have my_rank = 0 we have the lower-left corner, which is the (0,0) block (subdomain). 
-    */
+     *  We need to locate this rank within the global (whole) domain in terms of its x,y position.
+     *  e.g. if we have my_rank = 0 we have the lower-left corner, which is the (0,0) block (subdomain).
+     */
     int ip = my_rank % _iproc; // x-index of this rank in the domain decomposition
     int jp = my_rank / _iproc; // y-index of this rank in the domain decomposition
 
     // Distribute cells (as evenly as possible) to each process
     int min_cells_x = imax_domain / _iproc; // minimum # of cells each rank gets in x
-    int leftover_x  = imax_domain % _iproc; // remaining cells 
-    int min_cells_y = jmax_domain / _jproc;      
-    int leftover_y  = jmax_domain % _jproc;
+    int leftover_x = imax_domain % _iproc;  // remaining cells
+    int min_cells_y = jmax_domain / _jproc;
+    int leftover_y = jmax_domain % _jproc;
     // Assignment of leftovers (when it corresponds)
     int local_x = min_cells_x; // number of cells in x for this rank
     int local_y = min_cells_y; // number of cells in y for this rank
-    if (ip < leftover_x){ 
-        local_x += 1; 
-    }    
-    if (jp < leftover_y){ 
-        local_y += 1; 
+    if (ip < leftover_x) {
+        local_x += 1;
+    }
+    if (jp < leftover_y) {
+        local_y += 1;
     }
 
     /* In order to correctly read the PGM geometry file, we need to know where (in which cell)
-    *  in the global domain each subdomain starts and ends.
-    *  We compute the global start index (1-based, matching PGM indexing) by accumulating
-    *  the cell counts of all ranks that come before this one in x (or y).
-    *  Each previous rank owns min_cells_x (or min_cells_y) cells, plus 1 extra if it received a leftover.
-    */
+     *  in the global domain each subdomain starts and ends.
+     *  We compute the global start index (1-based, matching PGM indexing) by accumulating
+     *  the cell counts of all ranks that come before this one in x (or y).
+     *  Each previous rank owns min_cells_x (or min_cells_y) cells, plus 1 extra if it received a leftover.
+     */
     int gi_start = 1;
     int gj_start = 1;
 
-    for (int i = 0; i<ip; i++){
+    for (int i = 0; i < ip; i++) {
         gi_start += min_cells_x;
-        if (i < leftover_x){
+        if (i < leftover_x) {
             gi_start += 1;
         }
     }
-    for (int j = 0; j < jp; j++){
+    for (int j = 0; j < jp; j++) {
         gj_start += min_cells_y;
-        if (j < leftover_y){
+        if (j < leftover_y) {
             gj_start += 1;
         }
     }
-    
+
     int gi_end = gi_start + local_x - 1;
     int gj_end = gj_start + local_y - 1;
 
     // Domain struct filling
     /* Apart from our own PGM-domain cells we need ghost cells to impose boundary conditions and
-    *  to exchange values with neighboring subdomains during MPI communication. We do so by:
-    *  -1: one ghost cell layer on the left/bottom side
-    *  +1: one ghost cell layer on the right/top side.
-    */
+     *  to exchange values with neighboring subdomains during MPI communication. We do so by:
+     *  -1: one ghost cell layer on the left/bottom side
+     *  +1: one ghost cell layer on the right/top side.
+     */
     domain.iminb = gi_start - 1; // left layer
     domain.jminb = gj_start - 1; // bottom layer
-    domain.imaxb = gi_end + 1; // right layer
-    domain.jmaxb = gj_end + 1; // top layer
+    domain.imaxb = gi_end + 1;   // right layer
+    domain.jmaxb = gj_end + 1;   // top layer
 
     domain.size_x = local_x;
     domain.size_y = local_y;
 
     /* Mark whether this rank contains a physical boundary of the domain -> true
-    *  or if the boundaries are internal boundaries between two subdomains -> false
-    */
-    domain.left_physical   = (ip == 0);
-    domain.right_physical  = (ip == _iproc - 1); // because ip and jp are 0-based 
+     *  or if the boundaries are internal boundaries between two subdomains -> false
+     */
+    domain.left_physical = (ip == 0);
+    domain.right_physical = (ip == _iproc - 1); // because ip and jp are 0-based
     domain.bottom_physical = (jp == 0);
-    domain.top_physical    = (jp == _jproc - 1);
+    domain.top_physical = (jp == _jproc - 1);
 
     /* In order to exchange data at the internal boundary between two subdomains, we must store
-    *  the rank of the neighboring subdomains: left, right, bottom, top.
-    *  For ranks on the edge of the global domain, some neighbors don't exist. In those cases we
-    *  assign MPI_PROC_NULL so that MPI_Sendrecv silently does nothing in that direction.
-    */
+     *  the rank of the neighboring subdomains: left, right, bottom, top.
+     *  For ranks on the edge of the global domain, some neighbors don't exist. In those cases we
+     *  assign MPI_PROC_NULL so that MPI_Sendrecv silently does nothing in that direction.
+     */
     // Ranks (rank = ip + jp * _iproc) of the left, right, bottom, top neighbors:
     if (ip == 0) {
         domain.rank_left = MPI_PROC_NULL;

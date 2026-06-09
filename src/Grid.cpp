@@ -15,7 +15,7 @@ Grid::Grid(std::string geom_name, Domain &domain) {
 
     if (geom_name.compare("NONE")) {
 
-        //matrix for Geo file parsing 
+        // matrix for Geo file parsing
         std::vector<std::vector<int>> geometry_data(_domain.domain_imax + 2,
                                                     std::vector<int>(_domain.domain_jmax + 2, 0));
 
@@ -61,9 +61,9 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
         for (int i_geom = _domain.iminb; i_geom <= _domain.imaxb; ++i_geom) {
             const int id = geometry_data.at(i_geom).at(j_geom);
             if (id == 0) {
-                // We make a distinction so that fluid halo cells are kept out of fluid 
-                // cells vector of pointers. This way they are not updated in the SOR, nor 
-                // actual boundary cells values are set taking them into account. 
+                // We make a distinction so that fluid halo cells are kept out of fluid
+                // cells vector of pointers. This way they are not updated in the SOR, nor
+                // actual boundary cells values are set taking them into account.
                 const bool is_halo = (i == 0 || i == _domain.size_x + 1 || j == 0 || j == _domain.size_y + 1);
                 if (is_halo) {
                     _cells(i, j) = Cell(i, j, cell_type::FLUID_HALO);
@@ -240,8 +240,9 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     auto remove_inactive_boundaries = [](std::vector<Cell *> &cells) {
         // Remove if no borders, if this boundary cell does not touch any owned fluid cell.
         // It may still touch FLUID_HALO, but that face is handled by the rank that owns that fluid cell.
-        cells.erase(std::remove_if(cells.begin(), cells.end(), [](const Cell *cell) { return cell->borders().empty(); }),
-                    cells.end());
+        cells.erase(
+            std::remove_if(cells.begin(), cells.end(), [](const Cell *cell) { return cell->borders().empty(); }),
+            cells.end());
     };
 
     // Apply the same cleanup to every boundary type before Boundary objects are created in Case.

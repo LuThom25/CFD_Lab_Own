@@ -9,7 +9,6 @@
  */
 struct Domain {
 
-
     // These indexes would only used for cell type assingment
     /// Minimum x index including ghost cells
     int iminb{-1};

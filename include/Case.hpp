@@ -76,8 +76,8 @@ class Case {
 
     // WS2: geometry and boundary parameters
     double _UIN{0.0};       // Inlet x-velocity read from "UIN" in .dat
-    double _VIN{0.0};       // Inlet y-velocity read from "VIN" in .dat 
-    bool _energy_eq{false}; // True when "energy_eq on" appears in .dat 
+    double _VIN{0.0};       // Inlet y-velocity read from "VIN" in .dat
+    bool _energy_eq{false}; // True when "energy_eq on" appears in .dat
     /// Wall temperatures keyed by PGM cell ID (3–7); -1.0 = adiabatic.
     /// Read from wall_temp_3/4/5 entries in .dat.
     std::map<int, double> _wall_temperatures;
@@ -88,10 +88,10 @@ class Case {
     double beta{};  // thermal expansion
 
     // WS3 parallelisation parameters
-    int _iproc{1};    // Number of MPI ranks in x-direction
-    int _jproc{1};    // Number of MPI ranks in y-direction
-    int _my_rank{0};  // MPI rank of this process (0 in serial, set via MPI_Comm_rank in parallel)
-    int _size{1};     // Total number of MPI processes
+    int _iproc{1};         // Number of MPI ranks in x-direction
+    int _jproc{1};         // Number of MPI ranks in y-direction
+    int _my_rank{0};       // MPI rank of this process (0 in serial, set via MPI_Comm_rank in parallel)
+    int _size{1};          // Total number of MPI processes
     bool _parallel{false}; // used for serial/parallel run
 
     /**

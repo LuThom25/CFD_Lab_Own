@@ -56,7 +56,7 @@ class Boundary {
      * @param[in] Field to be applied
      * @param[in] Cell to which the boundary condition is applied
      */
-    virtual void applyFluxToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell) {};
+    virtual void applyFluxToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell){};
 
     /**
      * @brief Method to patch the temperature boundary conditions to the given field.
@@ -71,7 +71,7 @@ class Boundary {
      * @param[in] Field to be applied
      * @param[in] Cell to which the boundary condition is applied
      */
-    virtual void applyTemperatureToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell) {};
+    virtual void applyTemperatureToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell){};
 
     /**
      * @brief Virtual destructor for the boundary class.

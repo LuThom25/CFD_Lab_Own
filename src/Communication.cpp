@@ -15,32 +15,28 @@
 #include "Communication.hpp"
 
 #include <vector>
-void Communication::init_parallel(int& argn, char **&args){
+void Communication::init_parallel(int &argn, char **&args) {
     // Initialize MPI: assign rank numbers and define global communicator
-    MPI_Init(&argn, &args); 
-    
+    MPI_Init(&argn, &args);
+
     // Get the number of processes in the communicator
-    // -> MPI_COMM_WORLD is the global communicator comprising all processes  
-    MPI_Comm_size(MPI_COMM_WORLD, &_size); 
-    
+    // -> MPI_COMM_WORLD is the global communicator comprising all processes
+    MPI_Comm_size(MPI_COMM_WORLD, &_size);
+
     // Get the assigned rank number of the process
     MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
 }
 
-void Communication::finalize(){
+void Communication::finalize() {
     // Wait for all processes to exit
     MPI_Finalize();
 }
 
-int Communication::get_size(){
-    return _size;
-}
+int Communication::get_size() { return _size; }
 
-int Communication::get_rank(){
-    return _rank;
-}
+int Communication::get_rank() { return _rank; }
 
-void Communication::communicate_field(Matrix<double> &field, const Domain &domain){
+void Communication::communicate_field(Matrix<double> &field, const Domain &domain) {
     // MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype, int dest,
     //     int sendtag, void *recvbuf, int recvcount, MPI_Datatype recvtype, int source,
     //     int recvtag, MPI_Comm comm, MPI_Status *status)
@@ -56,24 +52,23 @@ void Communication::communicate_field(Matrix<double> &field, const Domain &domai
     }
     if (!domain.top_physical && !domain.bottom_physical) {
         MPI_Sendrecv(field.data() + (n_row - 2) * n_col + 1, n_col - 2, MPI_DOUBLE, domain.rank_top, 0,
-                    field.data() + 1, n_col - 2, MPI_DOUBLE, domain.rank_bottom, 0,
-                    MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                     field.data() + 1, n_col - 2, MPI_DOUBLE, domain.rank_bottom, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     // Send downwards and receive upwards
     if (domain.bottom_physical && !domain.top_physical) {
-        MPI_Recv(field.data() + (n_row - 1) * n_col + 1, n_col - 2, MPI_DOUBLE, domain.rank_top, 0, 
-                    MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(field.data() + (n_row - 1) * n_col + 1, n_col - 2, MPI_DOUBLE, domain.rank_top, 0, MPI_COMM_WORLD,
+                 MPI_STATUS_IGNORE);
     }
     if (domain.top_physical && !domain.bottom_physical) {
         MPI_Send(field.data() + n_col + 1, n_col - 2, MPI_DOUBLE, domain.rank_bottom, 0, MPI_COMM_WORLD);
     }
     if (!domain.top_physical && !domain.bottom_physical) {
         MPI_Sendrecv(field.data() + n_col + 1, n_col - 2, MPI_DOUBLE, domain.rank_bottom, 0,
-                    field.data() + (n_row - 1) * n_col + 1, n_col - 2, MPI_DOUBLE, domain.rank_top, 0,
-                    MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                     field.data() + (n_row - 1) * n_col + 1, n_col - 2, MPI_DOUBLE, domain.rank_top, 0, MPI_COMM_WORLD,
+                     MPI_STATUS_IGNORE);
     }
-    
+
     // Send right and receive left.
     // Vertical exchange has already updated top/bottom ghost rows, so exchanging
     // full columns here also propagates diagonal halo corners for 2D decompositions.
@@ -90,9 +85,8 @@ void Communication::communicate_field(Matrix<double> &field, const Domain &domai
         std::vector<double> col_vec_send = field.get_col(n_col - 2);
         std::vector<double> col_vec_receive(n_row, 0);
 
-        MPI_Sendrecv(col_vec_send.data(), n_row, MPI_DOUBLE, domain.rank_right, 0,
-                     col_vec_receive.data(), n_row, MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD,
-                     MPI_STATUS_IGNORE);
+        MPI_Sendrecv(col_vec_send.data(), n_row, MPI_DOUBLE, domain.rank_right, 0, col_vec_receive.data(), n_row,
+                     MPI_DOUBLE, domain.rank_left, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         field.set_col(col_vec_receive, 0);
     }
 
@@ -110,21 +104,20 @@ void Communication::communicate_field(Matrix<double> &field, const Domain &domai
         std::vector<double> col_vec_send = field.get_col(1);
         std::vector<double> col_vec_receive(n_row, 0);
 
-        MPI_Sendrecv(col_vec_send.data(), n_row, MPI_DOUBLE, domain.rank_left, 0,
-                     col_vec_receive.data(), n_row, MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD,
-                     MPI_STATUS_IGNORE);
+        MPI_Sendrecv(col_vec_send.data(), n_row, MPI_DOUBLE, domain.rank_left, 0, col_vec_receive.data(), n_row,
+                     MPI_DOUBLE, domain.rank_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         field.set_col(col_vec_receive, n_col - 1);
     }
 }
-double Communication::reduce_min(double value){
+double Communication::reduce_min(double value) {
     // We want to calculate the minimum of all values in different processes
-    // We use all reduce to "collect" values from all ranks, we want to read a single addres. 
+    // We use all reduce to "collect" values from all ranks, we want to read a single addres.
     // The output type will be double and the operation performed is the minimum of all values
     // and returns this minimum to all processes and overwrites in the initial address
     MPI_Allreduce(&value, &value, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     return value;
 }
-double Communication::reduce_sum(double value){
+double Communication::reduce_sum(double value) {
     MPI_Allreduce(&value, &value, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     return value;
 }
