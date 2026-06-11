@@ -10,6 +10,12 @@
  * @brief Abstract of boundary conditions.
  *
  * This class patches the physical values to the given field.
+ *
+ * Design: Non-Virtual Interface (NVI) pattern.
+ * The public methods (applyVelocity, applyPressure, applyFlux, applyTemperature)
+ * own the loop over all cells and are non-virtual. Subclasses override only the
+ * virtual *ToCell hooks, which are called per cell by the base-class loop.
+ * This keeps the iteration logic in one place and prevents accidental bypass.
  */
 class Boundary {
   public:
@@ -56,6 +62,8 @@ class Boundary {
      * @param[in] Field to be applied
      * @param[in] Cell to which the boundary condition is applied
      */
+    // Default: no-op. All current subclasses override this, but a default body
+    // avoids a pure-virtual requirement and keeps future subclasses simpler.
     virtual void applyFluxToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell){};
 
     /**
@@ -71,6 +79,8 @@ class Boundary {
      * @param[in] Field to be applied
      * @param[in] Cell to which the boundary condition is applied
      */
+    // Default: no-op. InFlowBoundary and OutFlowBoundary do not handle temperature,
+    // so this must not be pure virtual. FixedWallBoundary and MovingWallBoundary override it.
     virtual void applyTemperatureToCell([[maybe_unused]] Fields &field, [[maybe_unused]] Cell *cell){};
 
     /**

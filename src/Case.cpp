@@ -136,22 +136,15 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
             if (_my_rank == 0)
                 std::cout << "Error: invalid user input for iproc or jproc. Values less than or equal to 0. \n";
             MPI_Finalize(); // Finalize before exiting the program
-            exit(1);        // Terminate the program
+            std::exit(EXIT_FAILURE);
         } else if (_iproc * _jproc != _size) {
             if (_my_rank == 0) std::cout << "Error: invalid user input for iproc or jproc. Sizes dont match. \n";
             MPI_Finalize();
-            exit(1);
+            std::exit(EXIT_FAILURE);
         }
     }
     file.close();
 
-    // Validate iproc / jproc
-    if (_iproc < 1 || _jproc < 1) {
-        if (_my_rank == 0)
-            std::cerr << "[Error] iproc and jproc must both be >= 1 (got iproc=" << _iproc << ", jproc=" << _jproc
-                      << "). Aborting.\n";
-        std::exit(EXIT_FAILURE);
-    }
     _UIN = UIN;
     _VIN = VIN;
 
