@@ -121,6 +121,8 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
                 // WS3: MPI domain decomposition
                 if (var == "iproc") file >> _iproc;
                 if (var == "jproc") file >> _jproc;
+                // Pressure solver selection
+                if (var == "solver") file >> _solver_name;
             }
         }
         // Enable/disable the communication steps
@@ -169,7 +171,14 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
     _field = Fields(nu, dt, tau, alpha, beta, GX, GY, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
-    _pressure_solver = std::make_unique<SOR_Standard>(omg);
+    if (_solver_name == "CG_STANDARD") {
+        _pressure_solver = std::make_unique<CG_Solver>(
+            eps, itermax,
+            _field.p_matrix().num_cols(),
+            _field.p_matrix().num_rows());
+    } else {
+        _pressure_solver = std::make_unique<SOR_Standard>(omg);
+    }
     _max_iter = itermax;
     _tolerance = eps;
     _nu = nu;
@@ -253,6 +262,20 @@ void Case::simulate() { // Inialize variables
     int timestep = 0;
     double output_counter = 0.0;
 
+    // Logging setup
+    bool is_cg = (_solver_name == "CG_STANDARD");
+    CG_Solver *cg_ptr = is_cg ? dynamic_cast<CG_Solver *>(_pressure_solver.get()) : nullptr;
+    const double t_wall_start = MPI_Wtime();
+    std::ofstream solver_log;
+    if (_my_rank == 0) {
+        solver_log.open(_dict_name + "/sor_log.csv");
+        solver_log << "timestep,t,sor_iters,residual\n";
+    }
+
+    // Precompute global fluid cell count (used for residual normalisation every timestep)
+    const double global_fluid_cells_precomp =
+        Communication::reduce_sum(static_cast<double>(_grid.fluid_cells().size()));
+
     if (_my_rank == 0)
         std::cout << "Starting simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
                   << std::endl;
@@ -322,11 +345,9 @@ void Case::simulate() { // Inialize variables
 
             // sum among processors
             const double global_residual_sum = Communication::reduce_sum(local_residual_sum);
-            const double global_fluid_cells =
-                Communication::reduce_sum(static_cast<double>(_grid.fluid_cells().size()));
 
-            // re-normalize in global terms
-            residual = std::sqrt(global_residual_sum / global_fluid_cells);
+            // re-normalize in global terms (use precomputed cell count)
+            residual = std::sqrt(global_residual_sum / global_fluid_cells_precomp);
             ++iter;
         }
         // Divergence check
@@ -336,6 +357,14 @@ void Case::simulate() { // Inialize variables
                 std::cout << "\n[DIVERGED] t=" << std::fixed << std::setprecision(4) << t << "  step=" << timestep
                           << "  residual=" << std::scientific << std::setprecision(2) << residual << "\n";
             break;
+        }
+
+        // Per-timestep CSV logging
+        {
+            int log_iters = cg_ptr ? cg_ptr->last_iter_count() : iter;
+            if (_my_rank == 0)
+                solver_log << timestep + 1 << "," << std::fixed << std::setprecision(6) << t + dt << ","
+                           << log_iters << "," << std::scientific << std::setprecision(6) << residual << "\n";
         }
 
         // Step 6: Correct velocities using updated pressure
@@ -361,9 +390,14 @@ void Case::simulate() { // Inialize variables
         }
     }
 
-    if (_my_rank == 0)
+    const double t_wall = MPI_Wtime() - t_wall_start;
+    if (_my_rank == 0) {
+        solver_log.close();
+        std::ofstream wt(_dict_name + "/walltime.txt");
+        wt << t_wall << "\n";
         std::cout << "Finished simulation: " << _case_name << " t=" << std::fixed << std::setprecision(3) << t
-                  << std::endl;
+                  << "  wall=" << std::fixed << std::setprecision(2) << t_wall << "s\n";
+    }
 }
 
 void Case::output_vtk(int timestep) {

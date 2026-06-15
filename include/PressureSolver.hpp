@@ -44,3 +44,74 @@ class SOR_Standard : public PressureSolver {
   private:
     double _omega;
 };
+
+/**
+ * @brief Plain (unpreconditioned) Conjugate Gradient solver for the pressure
+ *        Poisson equation.
+ *
+ * Design mirrors SOR_Standard: iterate() performs the full CG solve per
+ * timestep, calculate_residual() recomputes the L2-norm from the current
+ * pressure field — identical formula to SOR_Standard::calculate_residual().
+ * No mean-pressure subtraction is applied; the Fredholm correction on RS
+ * in Fields::calculate_rs() is sufficient, matching SOR behaviour.
+ *
+ * Auxiliary vectors (_r, _d, _q) are allocated once in the constructor
+ * with the same dimensions as the pressure matrix (size_x+2, size_y+2).
+ *
+ * Algorithm executed inside iterate() each timestep:
+ *   1.  r = Δₕp - RS          initial residual (warm start from previous timestep)
+ *   2.  d = r                  first search direction
+ *   3.  rr = reduce_sum(r·r)   global ‖r‖²                          [MPI]
+ *   Loop until converged:
+ *   a.  communicate(d)         halo exchange so stencil sees neighbours [MPI]
+ *   b.  q = -Δₕd               matrix-vector product (A_cg = -Δₕ)
+ *   c.  dq = reduce_sum(d·q)   global dot product for step size        [MPI]
+ *   d.  α = rr / dq
+ *   e.  p += α·d               solution update
+ *   f.  r -= α·q               residual update
+ *   g.  rr_new = reduce_sum(r·r)                                       [MPI]
+ *   h.  β = rr_new / rr        conjugacy coefficient
+ *   i.  d = r + β·d            new search direction
+ *   j.  rr = rr_new
+ */
+class CG_Solver : public PressureSolver {
+  public:
+    CG_Solver() = default;
+
+    /**
+     * @brief Constructor of CG_Solver
+     *
+     * @param[in] tolerance  Convergence tolerance (eps from .dat file)
+     * @param[in] max_iter   Maximum CG iterations (itermax from .dat file)
+     * @param[in] nc         Number of matrix columns  (p_matrix().num_cols())
+     * @param[in] nr         Number of matrix rows     (p_matrix().num_rows())
+     */
+    CG_Solver(double tolerance, int max_iter, int nc, int nr);
+
+    virtual ~CG_Solver() = default;
+
+    void iterate(Fields &field, Grid &grid) override;
+    double calculate_residual(Fields &field, Grid &grid) override;
+
+    // Number of CG iterations performed in the last iterate() call.
+    int last_iter_count() const { return _last_iter_count; }
+
+  private:
+    double _tolerance{0.0};
+    int    _max_iter{0};
+    int    _last_iter_count{0};
+
+    Matrix<double> _r; // CG residual:      r = Δₕp - RS  (= b_cg - A_cg*p)
+    Matrix<double> _d; // search direction: communicated before each matvec
+    Matrix<double> _q; // matvec result:    q = A_cg*d = -Δₕd
+
+    // Sums a(i,j)*b(i,j) over this rank's fluid cells only — no MPI.
+    // Caller must follow up with Communication::reduce_sum() to get the
+    // global dot product across all ranks (done in iterate() for alpha/beta).
+    double dot_local(const Matrix<double> &a, const Matrix<double> &b,
+                     const std::vector<Cell *> &cells);
+
+    // AXPY: y(i,j) += alpha * x(i,j)  over fluid_cells()
+    void axpy(double alpha, const Matrix<double> &x, Matrix<double> &y,
+              const std::vector<Cell *> &cells);
+};
