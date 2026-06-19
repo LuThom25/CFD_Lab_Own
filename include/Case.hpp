@@ -73,6 +73,8 @@ class Case {
     double _omg{0.0};
     /// Name of the active pressure solver (stored for console output)
     std::string _solver_name{"SOR"};
+    // Fix B: SSOR relaxation factor for PCG_SSOR; read from "omega_pcg" in .dat.
+    double _omega_pcg{1.0};
 
     // WS2: geometry and boundary parameters
     double _UIN{0.0};       // Inlet x-velocity read from "UIN" in .dat

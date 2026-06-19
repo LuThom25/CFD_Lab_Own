@@ -164,9 +164,9 @@ double CG_Solver::calculate_residual(Fields &field, Grid &grid) {
 // PCG_SSOR — Preconditioned CG with Red-Black SSOR preconditioner
 // ---------------------------------------------------------------------------
 
-PCG_SSOR::PCG_SSOR(double tolerance, int max_iter, int nc, int nr)
-    : _tolerance(tolerance), _max_iter(max_iter),
-      _r(nc, nr, 0.0), _d(nc, nr, 0.0), _q(nc, nr, 0.0), _z(nc, nr, 0.0) {}
+PCG_SSOR::PCG_SSOR(double tolerance, int max_iter, int nc, int nr, double omega)
+    : _tolerance(tolerance), _max_iter(max_iter), _omega(omega),
+      _r(nc, nr, 0.0), _d(nc, nr, 0.0), _q(nc, nr, 0.0), _z(nc, nr, 0.0), _y(nc, nr, 0.0) {}
 
 double PCG_SSOR::dot_local(const Matrix<double> &a, const Matrix<double> &b,
                             const std::vector<Cell *> &cells) {
@@ -186,31 +186,41 @@ void PCG_SSOR::apply_ssor(const Matrix<double> &r, Matrix<double> &z, const Grid
     const double dx   = grid.dx(), dy = grid.dy();
     const double d_ii = 2.0 / (dx * dx) + 2.0 / (dy * dy);
 
-    for (auto c : _red_cells)   z(c->i(), c->j()) = 0.0;
-    for (auto c : _black_cells) z(c->i(), c->j()) = 0.0;
+    // Zero both _y (forward result) and z (final result) before sweeping.
+    for (auto c : _red_cells)   { _y(c->i(), c->j()) = 0.0; z(c->i(), c->j()) = 0.0; }
+    for (auto c : _black_cells) { _y(c->i(), c->j()) = 0.0; z(c->i(), c->j()) = 0.0; }
 
-    // Forward sweep: red then black
+    // --- Pass 1: forward red → writes into _y ---
+    // Black neighbours are 0, so sor_helper = 0 and _y_red = ω·r_red/d_ii.
     for (auto c : _red_cells) {
         int i = c->i(), j = c->j();
-        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
+        _y(i, j) = _omega * (r(i, j) + Discretization::sor_helper(_y, i, j)) / d_ii;
     }
-    Communication::communicate_field(z, grid.domain());
+    Communication::communicate_field(_y, grid.domain());
 
+    // --- Pass 2: forward black → writes into _y (reads _y_red from Pass 1) ---
     for (auto c : _black_cells) {
         int i = c->i(), j = c->j();
-        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
+        _y(i, j) = _omega * (r(i, j) + Discretization::sor_helper(_y, i, j)) / d_ii;
     }
-    Communication::communicate_field(z, grid.domain());
+    Communication::communicate_field(_y, grid.domain());
 
-    // Backward sweep: red only (black is skipped — it is a no-op).
-    // Proof: backward-black reads only red neighbours via sor_helper. Those
-    // red values were set in Pass 1 and have not changed since (Pass 2 only
-    // writes black cells). So backward-black would produce the same z_black
-    // as Pass 2, wasting 1 cell loop + 1 communicate_field per apply_ssor
-    // call (= 2 MPI operations per outer PCG iteration).
+    // --- backward-black is a no-op: z_black = _y_black ---
+    // In the backward sweep, backward-black reads only red neighbours (z_red),
+    // which are still 0 at this point. So the correct SSOR backward formula
+    // gives z_black = _y_black + ω·sor_helper_red(z_red=0)/d_ii = _y_black.
+    // We copy _y_black → z_black and skip the communicate (halo already current).
+    for (auto c : _black_cells) z(c->i(), c->j()) = _y(c->i(), c->j());
+
+    // --- Pass 3: backward red (correct SSOR(ω) formula) ---
+    // Correct formula: z_red = _y_red + ω · sor_helper_black(_y_black) / d_ii
+    // sor_helper reads z_black = _y_black (set above); z_red = 0 so only black
+    // neighbours contribute — exactly the upper-triangle term of the backward step.
+    // For ω=1 this is identical to the original code. For ω≠1 this is the correct
+    // SSOR(ω) formula — the previous Fix 2 used r here instead of _y, which was wrong.
     for (auto c : _red_cells) {
         int i = c->i(), j = c->j();
-        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
+        z(i, j) = _y(i, j) + _omega * Discretization::sor_helper(z, i, j) / d_ii;
     }
     Communication::communicate_field(z, grid.domain());
 }
