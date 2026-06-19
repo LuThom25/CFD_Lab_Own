@@ -125,6 +125,27 @@ iters_plot(
     "plot_ldc_all_solvers_serial.pdf")
 
 iters_plot(
+    [("LidDrivenCavity300_sor_1_1", "SOR (1×1)", 1, "-", "#1E88E5"),
+     ("LidDrivenCavity300_cg_1_1",  "CG (1×1)",  1, "-", "#43A047"),
+     ("LidDrivenCavity300_pcg_1_1", "PCG (1×1)", 1, "-", "#8E24AA")],
+    "SOR vs CG vs PCG — iterations/step (1×1, 150×150)",
+    "plot_ldc_all_solvers_1_1.pdf")
+
+iters_plot(
+    [("LidDrivenCavity300_sor_2_2", "SOR (2×2)", 4, "-", "#1E88E5"),
+     ("LidDrivenCavity300_cg_2_2",  "CG (2×2)",  4, "-", "#43A047"),
+     ("LidDrivenCavity300_pcg_2_2", "PCG (2×2)", 4, "-", "#8E24AA")],
+    "SOR vs CG vs PCG — iterations/step (2×2, 150×150)",
+    "plot_ldc_all_solvers_2_2.pdf")
+
+iters_plot(
+    [("LidDrivenCavity300_sor_1_4", "SOR (1×4)", 4, "-", "#1E88E5"),
+     ("LidDrivenCavity300_cg_1_4",  "CG (1×4)",  4, "-", "#43A047"),
+     ("LidDrivenCavity300_pcg_1_4", "PCG (1×4)", 4, "-", "#8E24AA")],
+    "SOR vs CG vs PCG — iterations/step (1×4, 150×150)",
+    "plot_ldc_all_solvers_1_4.pdf")
+
+iters_plot(
     [("LidDrivenCavity300_sor_2_2", "SOR (2×2)", 4, "-",  "#1E88E5"),
      ("LidDrivenCavity300_sor_1_4", "SOR (1×4)", 4, "--", "#90CAF9"),
      ("LidDrivenCavity300_cg_2_2",  "CG (2×2)",  4, "-",  "#43A047"),

@@ -121,6 +121,20 @@ iters_plot(
     "SOR vs CG vs PCG — iterations/step (1×1, Rayleigh-Bénard)",
     "plot_rb_all_solvers_1_1.pdf")
 
+iters_plot(
+    [("RayleighBenard_sor_2_2", "SOR (2×2)", 4, "2×2", "-", "#1E88E5"),
+     ("RayleighBenard_cg_2_2",  "CG (2×2)",  4, "2×2", "-", "#43A047"),
+     ("RayleighBenard_pcg_2_2", "PCG (2×2)", 4, "2×2", "-", "#8E24AA")],
+    "SOR vs CG vs PCG — iterations/step (2×2, Rayleigh-Bénard)",
+    "plot_rb_all_solvers_2_2.pdf")
+
+iters_plot(
+    [("RayleighBenard_sor_4_1", "SOR (4×1)", 4, "4×1", "-", "#1E88E5"),
+     ("RayleighBenard_cg_4_1",  "CG (4×1)",  4, "4×1", "-", "#43A047"),
+     ("RayleighBenard_pcg_4_1", "PCG (4×1)", 4, "4×1", "-", "#8E24AA")],
+    "SOR vs CG vs PCG — iterations/step (4×1, Rayleigh-Bénard)",
+    "plot_rb_all_solvers_4_1.pdf")
+
 # ---------------------------------------------------------------------------
 # Plot 2: Wall time — 3 solvers grouped
 # ---------------------------------------------------------------------------
