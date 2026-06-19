@@ -186,3 +186,38 @@ class PCG_SSOR : public PressureSolver {
     void   axpy(double alpha, const Matrix<double> &x, Matrix<double> &y,
                 const std::vector<Cell *> &cells);
 };
+
+/**
+ * @brief Serial (no-MPI) version of PCG_SSOR for pure-compute benchmarking.
+ *
+ * Algorithmically identical to PCG_SSOR but all communicate_field and
+ * MPI_Allreduce calls are removed. Dot products use local values directly
+ * (correct for 1-rank runs where all cells are local). Intended for
+ * measuring the raw compute cost of PCG_SSOR without any MPI overhead.
+ *
+ * Use solver key: PCG_SSOR_SERIAL
+ */
+class PCG_SSOR_Serial : public PressureSolver {
+  public:
+    PCG_SSOR_Serial() = default;
+    PCG_SSOR_Serial(double tolerance, int max_iter, int nc, int nr);
+    virtual ~PCG_SSOR_Serial() = default;
+    void iterate(Fields &field, Grid &grid) override;
+    double calculate_residual(Fields &field, Grid &grid) override;
+    int last_iter_count() const { return _last_iter_count; }
+
+  private:
+    double _tolerance{0.0};
+    int    _max_iter{0};
+    int    _last_iter_count{0};
+
+    Matrix<double> _r, _d, _q, _z;
+    std::vector<Cell *> _red_cells, _black_cells;
+    bool _cells_partitioned{false};
+
+    void   apply_ssor(const Matrix<double> &r, Matrix<double> &z, const Grid &grid);
+    double dot_local(const Matrix<double> &a, const Matrix<double> &b,
+                     const std::vector<Cell *> &cells);
+    void   axpy(double alpha, const Matrix<double> &x, Matrix<double> &y,
+                const std::vector<Cell *> &cells);
+};

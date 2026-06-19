@@ -181,6 +181,11 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
             eps, itermax,
             _field.p_matrix().num_cols(),
             _field.p_matrix().num_rows());
+    } else if (_solver_name == "PCG_SSOR_SERIAL") {
+        _pressure_solver = std::make_unique<PCG_SSOR_Serial>(
+            eps, itermax,
+            _field.p_matrix().num_cols(),
+            _field.p_matrix().num_rows());
     } else {
         _pressure_solver = std::make_unique<SOR_Standard>(omg);
     }
@@ -268,8 +273,10 @@ void Case::simulate() { // Inialize variables
     double output_counter = 0.0;
 
     // Logging setup
-    CG_Solver *cg_ptr  = (_solver_name == "CG_STANDARD")
-                        ? dynamic_cast<CG_Solver *>(_pressure_solver.get()) : nullptr;
+    CG_Solver        *cg_ptr  = (_solver_name == "CG_STANDARD")
+                              ? dynamic_cast<CG_Solver        *>(_pressure_solver.get()) : nullptr;
+    PCG_SSOR_Serial  *pcgs_ptr = (_solver_name == "PCG_SSOR_SERIAL")
+                              ? dynamic_cast<PCG_SSOR_Serial  *>(_pressure_solver.get()) : nullptr;
     PCG_SSOR  *pcg_ptr = (_solver_name == "PCG_SSOR")
                         ? dynamic_cast<PCG_SSOR  *>(_pressure_solver.get()) : nullptr;
     const double t_wall_start = MPI_Wtime();
@@ -368,8 +375,9 @@ void Case::simulate() { // Inialize variables
 
         // Per-timestep CSV logging
         {
-            int log_iters = cg_ptr  ? cg_ptr->last_iter_count()
-                          : pcg_ptr ? pcg_ptr->last_iter_count()
+            int log_iters = cg_ptr   ? cg_ptr->last_iter_count()
+                          : pcg_ptr  ? pcg_ptr->last_iter_count()
+                          : pcgs_ptr ? pcgs_ptr->last_iter_count()
                           : iter;
             if (_my_rank == 0)
                 solver_log << timestep + 1 << "," << std::fixed << std::setprecision(6) << t + dt << ","
