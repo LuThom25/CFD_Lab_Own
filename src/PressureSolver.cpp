@@ -202,13 +202,12 @@ void PCG_SSOR::apply_ssor(const Matrix<double> &r, Matrix<double> &z, const Grid
     }
     Communication::communicate_field(z, grid.domain());
 
-    // Backward sweep: black then red (ensures M = Mᵀ → PCG correctness)
-    for (auto c : _black_cells) {
-        int i = c->i(), j = c->j();
-        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
-    }
-    Communication::communicate_field(z, grid.domain());
-
+    // Backward sweep: red only (black is skipped — it is a no-op).
+    // Proof: backward-black reads only red neighbours via sor_helper. Those
+    // red values were set in Pass 1 and have not changed since (Pass 2 only
+    // writes black cells). So backward-black would produce the same z_black
+    // as Pass 2, wasting 1 cell loop + 1 communicate_field per apply_ssor
+    // call (= 2 MPI operations per outer PCG iteration).
     for (auto c : _red_cells) {
         int i = c->i(), j = c->j();
         z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
