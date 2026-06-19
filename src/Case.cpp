@@ -122,9 +122,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
                 if (var == "iproc") file >> _iproc;
                 if (var == "jproc") file >> _jproc;
                 // Pressure solver selection
-                if (var == "solver")    file >> _solver_name;
-                // Fix B: SSOR relaxation factor — default 1.0 keeps existing .dat files working
-                if (var == "omega_pcg") file >> _omega_pcg;
+                if (var == "solver") file >> _solver_name;
             }
         }
         // Enable/disable the communication steps
@@ -182,8 +180,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
         _pressure_solver = std::make_unique<PCG_SSOR>(
             eps, itermax,
             _field.p_matrix().num_cols(),
-            _field.p_matrix().num_rows(),
-            _omega_pcg); // Fix B: pass relaxation factor
+            _field.p_matrix().num_rows());
     } else {
         _pressure_solver = std::make_unique<SOR_Standard>(omg);
     }

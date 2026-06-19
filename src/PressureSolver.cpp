@@ -165,9 +165,9 @@ double CG_Solver::calculate_residual(Fields &field, Grid &grid) {
 // PCG_SSOR — Preconditioned CG with Red-Black SSOR preconditioner
 // ---------------------------------------------------------------------------
 
-PCG_SSOR::PCG_SSOR(double tolerance, int max_iter, int nc, int nr, double omega)
-    : _tolerance(tolerance), _max_iter(max_iter), _omega(omega),
-      _r(nc, nr, 0.0), _d(nc, nr, 0.0), _q(nc, nr, 0.0), _z(nc, nr, 0.0), _y(nc, nr, 0.0) {}
+PCG_SSOR::PCG_SSOR(double tolerance, int max_iter, int nc, int nr)
+    : _tolerance(tolerance), _max_iter(max_iter),
+      _r(nc, nr, 0.0), _d(nc, nr, 0.0), _q(nc, nr, 0.0), _z(nc, nr, 0.0) {}
 
 double PCG_SSOR::dot_local(const Matrix<double> &a, const Matrix<double> &b,
                             const std::vector<Cell *> &cells) {
@@ -187,41 +187,27 @@ void PCG_SSOR::apply_ssor(const Matrix<double> &r, Matrix<double> &z, const Grid
     const double dx   = grid.dx(), dy = grid.dy();
     const double d_ii = 2.0 / (dx * dx) + 2.0 / (dy * dy);
 
-    // Zero both _y (forward result) and z (final result) before sweeping.
-    for (auto c : _red_cells)   { _y(c->i(), c->j()) = 0.0; z(c->i(), c->j()) = 0.0; }
-    for (auto c : _black_cells) { _y(c->i(), c->j()) = 0.0; z(c->i(), c->j()) = 0.0; }
+    for (auto c : _red_cells)   z(c->i(), c->j()) = 0.0;
+    for (auto c : _black_cells) z(c->i(), c->j()) = 0.0;
 
-    // --- Pass 1: forward red → writes into _y ---
-    // Black neighbours are 0, so sor_helper = 0 and _y_red = ω·r_red/d_ii.
+    // Forward sweep: red then black
     for (auto c : _red_cells) {
         int i = c->i(), j = c->j();
-        _y(i, j) = _omega * (r(i, j) + Discretization::sor_helper(_y, i, j)) / d_ii;
+        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
     }
-    Communication::communicate_field(_y, grid.domain());
+    Communication::communicate_field(z, grid.domain());
 
-    // --- Pass 2: forward black → writes into _y (reads _y_red from Pass 1) ---
     for (auto c : _black_cells) {
         int i = c->i(), j = c->j();
-        _y(i, j) = _omega * (r(i, j) + Discretization::sor_helper(_y, i, j)) / d_ii;
+        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
     }
-    Communication::communicate_field(_y, grid.domain());
+    Communication::communicate_field(z, grid.domain());
 
-    // --- backward-black is a no-op: z_black = _y_black ---
-    // In the backward sweep, backward-black reads only red neighbours (z_red),
-    // which are still 0 at this point. So the correct SSOR backward formula
-    // gives z_black = _y_black + ω·sor_helper_red(z_red=0)/d_ii = _y_black.
-    // We copy _y_black → z_black and skip the communicate (halo already current).
-    for (auto c : _black_cells) z(c->i(), c->j()) = _y(c->i(), c->j());
-
-    // --- Pass 3: backward red (correct SSOR(ω) formula) ---
-    // Correct formula: z_red = _y_red + ω · sor_helper_black(_y_black) / d_ii
-    // sor_helper reads z_black = _y_black (set above); z_red = 0 so only black
-    // neighbours contribute — exactly the upper-triangle term of the backward step.
-    // For ω=1 this is identical to the original code. For ω≠1 this is the correct
-    // SSOR(ω) formula — the previous Fix 2 used r here instead of _y, which was wrong.
+    // Fix A: backward-black removed (no-op — black reads only red neighbours,
+    // which have not changed since Pass 1). Saves 1 loop + 1 communicate/apply_ssor.
     for (auto c : _red_cells) {
         int i = c->i(), j = c->j();
-        z(i, j) = _y(i, j) + _omega * Discretization::sor_helper(z, i, j) / d_ii;
+        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
     }
     Communication::communicate_field(z, grid.domain());
 }
@@ -254,12 +240,11 @@ void PCG_SSOR::iterate(Fields &field, Grid &grid) {
         _d(i, j) = _z(i, j);
     }
 
-    // Fix C: compute rz and rr together in one MPI_Allreduce instead of two
-    // separate Communication::reduce_sum calls (saves 1 AllReduce per iteration).
-    double buf_init[2] = { dot_local(_r, _z, cells), dot_local(_r, _r, cells) };
-    MPI_Allreduce(MPI_IN_PLACE, buf_init, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    double rz = buf_init[0]; // (r, M⁻¹r) — used for alpha and beta
-    double rr = buf_init[1]; // (r, r)    — used for convergence check
+    // Fix C: compute rz and rr together in one MPI_Allreduce (saves 1 AllReduce).
+    double buf0[2] = { dot_local(_r, _z, cells), dot_local(_r, _r, cells) };
+    MPI_Allreduce(MPI_IN_PLACE, buf0, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    double rz = buf0[0];
+    double rr = buf0[1];
 
     _last_iter_count = 0;
     for (int iter = 0; iter < _max_iter && std::sqrt(rr / n_global) > _tolerance; ++iter) {
@@ -279,12 +264,11 @@ void PCG_SSOR::iterate(Fields &field, Grid &grid) {
 
         apply_ssor(_r, _z, grid);
 
-        // Fix C: compute rz_new and rr_new together in one MPI_Allreduce.
+        // Fix C: rz_new and rr_new in one MPI_Allreduce (saves 1 AllReduce/iter).
         double buf[2] = { dot_local(_r, _z, cells), dot_local(_r, _r, cells) };
         MPI_Allreduce(MPI_IN_PLACE, buf, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         const double rz_new = buf[0];
         rr = buf[1];
-
         const double beta = rz_new / rz;
 
         // d = z + β·d  (z, not r — key PCG difference from plain CG)

@@ -158,9 +158,7 @@ class CG_Solver : public PressureSolver {
 class PCG_SSOR : public PressureSolver {
   public:
     PCG_SSOR() = default;
-    // omega: SSOR relaxation factor read from "omega_pcg" in .dat (default 1.0 = SGS).
-    // Values in (1,2) reduce κ(M⁻¹A); backward formula uses _y so M = Mᵀ holds for any ω.
-    PCG_SSOR(double tolerance, int max_iter, int nc, int nr, double omega = 1.0);
+    PCG_SSOR(double tolerance, int max_iter, int nc, int nr);
     virtual ~PCG_SSOR() = default;
     void iterate(Fields &field, Grid &grid) override;
     double calculate_residual(Fields &field, Grid &grid) override;
@@ -169,14 +167,12 @@ class PCG_SSOR : public PressureSolver {
   private:
     double _tolerance{0.0};
     int    _max_iter{0};
-    double _omega{1.0};     // SSOR relaxation factor (Fix B)
     int    _last_iter_count{0};
 
-    Matrix<double> _r; // residual:              r = Δₕp - RS
-    Matrix<double> _d; // search direction:      communicated before matvec
-    Matrix<double> _q; // matvec result:         q = -Δₕd
-    Matrix<double> _z; // final precond. result: z = M⁻¹r  (backward pass output)
-    Matrix<double> _y; // forward-sweep result:  y = (D/ω + L)⁻¹ r  (Fix B)
+    Matrix<double> _r; // residual:             r = Δₕp - RS
+    Matrix<double> _d; // search direction:     communicated before matvec
+    Matrix<double> _q; // matvec result:        q = -Δₕd
+    Matrix<double> _z; // preconditioned resid: z = M⁻¹r
 
     std::vector<Cell *> _red_cells;    // cells where (i+j)%2 == 0
     std::vector<Cell *> _black_cells;  // cells where (i+j)%2 == 1
