@@ -1,4 +1,5 @@
 #include <cmath>
+#include <mpi.h>
 
 #include "Communication.hpp"
 #include "PressureSolver.hpp"
@@ -253,9 +254,12 @@ void PCG_SSOR::iterate(Fields &field, Grid &grid) {
         _d(i, j) = _z(i, j);
     }
 
-    // ρ = (r,z) — M⁻¹-weighted dot product (replaces (r,r) from plain CG)
-    double rz = Communication::reduce_sum(dot_local(_r, _z, cells));
-    double rr = Communication::reduce_sum(dot_local(_r, _r, cells));
+    // Fix C: compute rz and rr together in one MPI_Allreduce instead of two
+    // separate Communication::reduce_sum calls (saves 1 AllReduce per iteration).
+    double buf_init[2] = { dot_local(_r, _z, cells), dot_local(_r, _r, cells) };
+    MPI_Allreduce(MPI_IN_PLACE, buf_init, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    double rz = buf_init[0]; // (r, M⁻¹r) — used for alpha and beta
+    double rr = buf_init[1]; // (r, r)    — used for convergence check
 
     _last_iter_count = 0;
     for (int iter = 0; iter < _max_iter && std::sqrt(rr / n_global) > _tolerance; ++iter) {
@@ -275,8 +279,13 @@ void PCG_SSOR::iterate(Fields &field, Grid &grid) {
 
         apply_ssor(_r, _z, grid);
 
-        const double rz_new = Communication::reduce_sum(dot_local(_r, _z, cells));
-        const double beta   = rz_new / rz;
+        // Fix C: compute rz_new and rr_new together in one MPI_Allreduce.
+        double buf[2] = { dot_local(_r, _z, cells), dot_local(_r, _r, cells) };
+        MPI_Allreduce(MPI_IN_PLACE, buf, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        const double rz_new = buf[0];
+        rr = buf[1];
+
+        const double beta = rz_new / rz;
 
         // d = z + β·d  (z, not r — key PCG difference from plain CG)
         for (auto c : cells) {
@@ -285,7 +294,6 @@ void PCG_SSOR::iterate(Fields &field, Grid &grid) {
         }
 
         rz = rz_new;
-        rr = Communication::reduce_sum(dot_local(_r, _r, cells));
         ++_last_iter_count;
     }
 }
