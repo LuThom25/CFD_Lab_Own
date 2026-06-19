@@ -1,6 +1,6 @@
 """
 Strong Scaling Analysis — 150×150 Lid-Driven Cavity
-Vergleich SOR_STANDARD vs CG_STANDARD
+Compares SOR_STANDARD, CG_STANDARD and PCG_SSOR
 Decompositions: serial, 1×1, 2×2, 1×4
 
 Run after all simulations are complete:
@@ -18,19 +18,26 @@ DOWNLOADS = os.path.expanduser("~/Downloads")
 # (stem, label, n_procs, linestyle, color)
 SOR_CONFIGS = [
     ("LidDrivenCavity300_sor_serial", "SOR Serial",    1, "-",  "#90CAF9"),
-    ("LidDrivenCavity300_sor_1_1",    "SOR MPI (1×1)", 1, "--", "#FFCC02"),
-    ("LidDrivenCavity300_sor_2_2",    "SOR MPI (2×2)", 4, "-",  "#A5D6A7"),
-    ("LidDrivenCavity300_sor_1_4",    "SOR MPI (1×4)", 4, "--", "#EF9A9A"),
+    ("LidDrivenCavity300_sor_1_1",    "SOR MPI (1×1)", 1, "--", "#42A5F5"),
+    ("LidDrivenCavity300_sor_2_2",    "SOR MPI (2×2)", 4, "-",  "#1E88E5"),
+    ("LidDrivenCavity300_sor_1_4",    "SOR MPI (1×4)", 4, "--", "#1565C0"),
 ]
 
 CG_CONFIGS = [
-    ("LidDrivenCavity300_cg_serial", "CG Serial",    1, "-",  "#2196F3"),
-    ("LidDrivenCavity300_cg_1_1",    "CG MPI (1×1)", 1, "--", "#FF9800"),
-    ("LidDrivenCavity300_cg_2_2",    "CG MPI (2×2)", 4, "-",  "#4CAF50"),
-    ("LidDrivenCavity300_cg_1_4",    "CG MPI (1×4)", 4, "--", "#F44336"),
+    ("LidDrivenCavity300_cg_serial", "CG Serial",    1, "-",  "#A5D6A7"),
+    ("LidDrivenCavity300_cg_1_1",    "CG MPI (1×1)", 1, "--", "#66BB6A"),
+    ("LidDrivenCavity300_cg_2_2",    "CG MPI (2×2)", 4, "-",  "#43A047"),
+    ("LidDrivenCavity300_cg_1_4",    "CG MPI (1×4)", 4, "--", "#1B5E20"),
 ]
 
-ALL_CONFIGS = SOR_CONFIGS + CG_CONFIGS
+PCG_CONFIGS = [
+    ("LidDrivenCavity300_pcg_serial", "PCG Serial",    1, "-",  "#CE93D8"),
+    ("LidDrivenCavity300_pcg_1_1",    "PCG MPI (1×1)", 1, "--", "#AB47BC"),
+    ("LidDrivenCavity300_pcg_2_2",    "PCG MPI (2×2)", 4, "-",  "#8E24AA"),
+    ("LidDrivenCavity300_pcg_1_4",    "PCG MPI (1×4)", 4, "--", "#4A148C"),
+]
+
+ALL_CONFIGS = SOR_CONFIGS + CG_CONFIGS + PCG_CONFIGS
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,16 +79,15 @@ for stem, label, *_ in ALL_CONFIGS:
     df, wt = dfs[stem], times[stem]
     status = f"{len(df)} steps, {wt:.1f}s" if df is not None and wt else \
              f"{len(df)} steps"             if df is not None       else "not found"
-    print(f"  {label:22s}: {status}")
+    print(f"  {label:25s}: {status}")
 print()
 
 # ---------------------------------------------------------------------------
-# Plot 1: Solver iterations/step — SOR vs CG (serial only, clear comparison)
+# Plot helper: iterations per step
 # ---------------------------------------------------------------------------
 
 def iters_plot(configs, title, outfile):
-    avail = [s for s, *_ in configs if dfs.get(s) is not None]
-    if not avail:
+    if not any(dfs.get(s) is not None for s, *_ in configs):
         print(f"  [skip] {title}")
         return
     fig, ax = plt.subplots(figsize=(9, 4))
@@ -102,77 +108,72 @@ def iters_plot(configs, title, outfile):
     save(fig, outfile)
     plt.close()
 
+# ---------------------------------------------------------------------------
+# Plot 1: Per-solver iteration plots + comparisons
+# ---------------------------------------------------------------------------
+
 print("Generating iteration plots...")
-iters_plot(SOR_CONFIGS,
-           "SOR iterations/step — 150×150 Lid-Driven Cavity",
-           "plot_sor_iters.pdf")
-iters_plot(CG_CONFIGS,
-           "CG iterations/step — 150×150 Lid-Driven Cavity",
-           "plot_cg_iters.pdf")
+iters_plot(SOR_CONFIGS, "SOR iterations/step — 150×150 Lid-Driven Cavity",      "plot_ldc_sor_iters.pdf")
+iters_plot(CG_CONFIGS,  "CG iterations/step — 150×150 Lid-Driven Cavity",        "plot_ldc_cg_iters.pdf")
+iters_plot(PCG_CONFIGS, "PCG_SSOR iterations/step — 150×150 Lid-Driven Cavity",  "plot_ldc_pcg_iters.pdf")
 
-# Serial SOR vs CG direct comparison
-serial_both = [
-    ("LidDrivenCavity300_sor_serial", "SOR Serial", 1, "-",  "#2196F3"),
-    ("LidDrivenCavity300_cg_serial",  "CG Serial",  1, "-",  "#4CAF50"),
-]
-iters_plot(serial_both,
-           "SOR vs CG iterations/step — Serial (150×150)",
-           "plot_sor_vs_cg_iters_serial.pdf")
+iters_plot(
+    [("LidDrivenCavity300_sor_serial", "SOR Serial",  1, "-", "#1E88E5"),
+     ("LidDrivenCavity300_cg_serial",  "CG Serial",   1, "-", "#43A047"),
+     ("LidDrivenCavity300_pcg_serial", "PCG Serial",  1, "-", "#8E24AA")],
+    "SOR vs CG vs PCG — iterations/step (Serial, 150×150)",
+    "plot_ldc_all_solvers_serial.pdf")
 
-# 4-rank comparison
-ranks4_both = [
-    ("LidDrivenCavity300_sor_2_2", "SOR (2×2)", 4, "-",  "#2196F3"),
-    ("LidDrivenCavity300_sor_1_4", "SOR (1×4)", 4, "--", "#FF9800"),
-    ("LidDrivenCavity300_cg_2_2",  "CG (2×2)",  4, "-",  "#4CAF50"),
-    ("LidDrivenCavity300_cg_1_4",  "CG (1×4)",  4, "--", "#F44336"),
-]
-iters_plot(ranks4_both,
-           "SOR vs CG iterations/step — 4 Ranks (150×150)",
-           "plot_sor_vs_cg_iters_4ranks.pdf")
+iters_plot(
+    [("LidDrivenCavity300_sor_2_2", "SOR (2×2)", 4, "-",  "#1E88E5"),
+     ("LidDrivenCavity300_sor_1_4", "SOR (1×4)", 4, "--", "#90CAF9"),
+     ("LidDrivenCavity300_cg_2_2",  "CG (2×2)",  4, "-",  "#43A047"),
+     ("LidDrivenCavity300_cg_1_4",  "CG (1×4)",  4, "--", "#A5D6A7"),
+     ("LidDrivenCavity300_pcg_2_2", "PCG (2×2)", 4, "-",  "#8E24AA"),
+     ("LidDrivenCavity300_pcg_1_4", "PCG (1×4)", 4, "--", "#CE93D8")],
+    "SOR vs CG vs PCG — iterations/step (4 Ranks, 150×150)",
+    "plot_ldc_all_solvers_4ranks.pdf")
 
 # ---------------------------------------------------------------------------
-# Plot 2: Wall time SOR vs CG
+# Plot 2: Wall time — all 3 solvers grouped
 # ---------------------------------------------------------------------------
 
 print("Generating wall time plot...")
 
-sor_avail = [(s, l, c) for s, l, _, _, c in SOR_CONFIGS if times.get(s)]
-cg_avail  = [(s, l, c) for s, l, _, _, c in CG_CONFIGS  if times.get(s)]
+decomp_labels = ["Serial", "1×1", "2×2", "1×4"]
+sor_vals  = [times.get(s) for s, *_ in SOR_CONFIGS]
+cg_vals   = [times.get(s) for s, *_ in CG_CONFIGS]
+pcg_vals  = [times.get(s) for s, *_ in PCG_CONFIGS]
+all_vals  = [v for v in sor_vals + cg_vals + pcg_vals if v]
 
-if sor_avail or cg_avail:
-    fig, ax = plt.subplots(figsize=(10, 5))
-    w = 0.35
-    n = max(len(sor_avail), len(cg_avail))
+if all_vals:
+    fig, ax = plt.subplots(figsize=(12, 5))
+    w, n, mx = 0.25, len(SOR_CONFIGS), max(all_vals)
+    xs = list(range(n))
 
-    if sor_avail:
-        vals = [times[s] for s, *_ in sor_avail]
-        bars = ax.bar([i - w/2 for i in range(len(vals))], vals,
-                      width=w, color="#2196F3", label="SOR_STANDARD", edgecolor="white", alpha=0.85)
-        mx = max(times[s] for s, *_ in (sor_avail + cg_avail) if times.get(s))
+    def bar_group(vals, offset, color, label):
+        bars = ax.bar([x + offset for x in xs],
+                      [v if v else 0 for v in vals],
+                      width=w, color=color, label=label, edgecolor="white", alpha=0.85)
         for bar, val in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + mx*0.01,
-                    f"{val:.0f}s", ha="center", va="bottom", fontsize=10)
+            if val:
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + mx*0.01,
+                        f"{val:.0f}s", ha="center", va="bottom", fontsize=9)
 
-    if cg_avail:
-        vals = [times[s] for s, *_ in cg_avail]
-        bars = ax.bar([i + w/2 for i in range(len(vals))], vals,
-                      width=w, color="#4CAF50", label="CG_STANDARD", edgecolor="white", alpha=0.85)
-        mx = max(times[s] for s, *_ in (sor_avail + cg_avail) if times.get(s))
-        for bar, val in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + mx*0.01,
-                    f"{val:.0f}s", ha="center", va="bottom", fontsize=10)
+    bar_group(sor_vals, -w,  "#1E88E5", "SOR_STANDARD")
+    bar_group(cg_vals,   0,  "#43A047", "CG_STANDARD")
+    bar_group(pcg_vals,  w,  "#8E24AA", "PCG_SSOR")
 
-    tick_lbls = [l.replace("SOR ","").replace("CG ","") for _, l, _ in (sor_avail or cg_avail)]
-    ax.set_xticks(range(n))
-    ax.set_xticklabels(tick_lbls, fontsize=12)
+    ax.set_xticks(xs)
+    ax.set_xticklabels(decomp_labels, fontsize=12)
     ax.set_ylabel("Wall time (s)", fontsize=13)
-    ax.set_title("Wall time: SOR vs CG — 150×150 Lid-Driven Cavity", fontsize=14, fontweight="bold")
+    ax.set_title("Wall time: SOR vs CG vs PCG_SSOR — 150×150 Lid-Driven Cavity",
+                 fontsize=14, fontweight="bold")
     ax.legend(fontsize=11)
     ax.grid(True, axis="y", linestyle="--", alpha=0.35)
-    all_vals = [times[s] for s, *_ in sor_avail + cg_avail]
-    ax.set_ylim(top=max(all_vals) * 1.15)
+    ax.set_ylim(top=mx * 1.18)
     plt.tight_layout()
-    save(fig, "plot_walltime.pdf")
+    save(fig, "plot_ldc_walltime.pdf")
     plt.close()
 
 # ---------------------------------------------------------------------------
@@ -183,58 +184,57 @@ print("Generating speedup plot...")
 
 baseline_sor = times.get("LidDrivenCavity300_sor_serial") or times.get("LidDrivenCavity300_sor_1_1")
 baseline_cg  = times.get("LidDrivenCavity300_cg_serial")  or times.get("LidDrivenCavity300_cg_1_1")
+baseline_pcg = times.get("LidDrivenCavity300_pcg_serial") or times.get("LidDrivenCavity300_pcg_1_1")
 
-if baseline_sor or baseline_cg:
+if any([baseline_sor, baseline_cg, baseline_pcg]):
     fig, ax = plt.subplots(figsize=(9, 4))
 
-    if baseline_sor and sor_avail:
-        su = [baseline_sor / times[s] for s, *_ in sor_avail]
-        lbls = [l for _, l, _ in sor_avail]
-        ax.plot(range(len(su)), su, marker="s", color="#2196F3",
-                label="SOR Speedup", linewidth=2, linestyle="--")
-        for i, v in enumerate(su):
-            ax.annotate(f"{v:.2f}×", (i, v), textcoords="offset points",
-                        xytext=(0, 8), ha="center", fontsize=10, color="#2196F3")
+    def speedup_line(vals, baseline, color, marker, label):
+        if not baseline:
+            return
+        su = [baseline / v if v else None for v in vals]
+        xs_ = [i for i, v in enumerate(su) if v is not None]
+        ys_ = [v for v in su if v is not None]
+        if not xs_:
+            return
+        ax.plot(xs_, ys_, marker=marker, color=color, label=label, linewidth=2)
+        for x, y in zip(xs_, ys_):
+            ax.annotate(f"{y:.2f}×", (x, y), textcoords="offset points",
+                        xytext=(0, 8), ha="center", fontsize=10, color=color)
 
-    if baseline_cg and cg_avail:
-        su = [baseline_cg / times[s] for s, *_ in cg_avail]
-        lbls = [l for _, l, _ in cg_avail]
-        ax.plot(range(len(su)), su, marker="o", color="#4CAF50",
-                label="CG Speedup", linewidth=2)
-        for i, v in enumerate(su):
-            ax.annotate(f"{v:.2f}×", (i, v), textcoords="offset points",
-                        xytext=(0, -15), ha="center", fontsize=10, color="#4CAF50")
+    speedup_line(sor_vals,  baseline_sor, "#1E88E5", "s", "SOR Speedup")
+    speedup_line(cg_vals,   baseline_cg,  "#43A047", "o", "CG Speedup")
+    speedup_line(pcg_vals,  baseline_pcg, "#8E24AA", "^", "PCG Speedup")
 
-    tick_lbls = [l.replace("SOR ","").replace("CG ","")
-                 for _, l, _ in (sor_avail or cg_avail)]
-    ax.set_xticks(range(len(tick_lbls)))
-    ax.set_xticklabels(tick_lbls, fontsize=12)
-    ax.set_ylabel("Speedup (vs. Serial)", fontsize=13)
-    ax.set_title("Strong Scaling Speedup — 150×150 Lid-Driven Cavity", fontsize=14, fontweight="bold")
+    ax.set_xticks(range(n))
+    ax.set_xticklabels(decomp_labels, fontsize=12)
+    ax.set_ylabel("Speedup (vs. Serial baseline)", fontsize=13)
+    ax.set_title("Strong Scaling Speedup — 150×150 Lid-Driven Cavity",
+                 fontsize=14, fontweight="bold")
     ax.axhline(y=1, color="gray", linestyle=":", alpha=0.5)
     ax.legend(fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.35)
     ax.set_ylim(bottom=0)
     plt.tight_layout()
-    save(fig, "plot_speedup.pdf")
+    save(fig, "plot_ldc_speedup.pdf")
     plt.close()
 
 # ---------------------------------------------------------------------------
 # Summary table
 # ---------------------------------------------------------------------------
 
-print("\n=== Summary Table ===")
-print(f"{'Config':<25} {'Wall [s]':>10} {'Speedup':>10} {'Avg iters':>12} {'Max iters':>12}")
-print("-" * 72)
-for configs, baseline in [(SOR_CONFIGS, baseline_sor), (CG_CONFIGS, baseline_cg)]:
+print("\n=== Summary Table — 150×150 Lid-Driven Cavity ===")
+print(f"{'Config':<28} {'Wall [s]':>10} {'Speedup':>10} {'Avg iters':>12} {'Max iters':>12}")
+print("-" * 75)
+for configs, baseline in [(SOR_CONFIGS, baseline_sor), (CG_CONFIGS, baseline_cg), (PCG_CONFIGS, baseline_pcg)]:
     for stem, label, *_ in configs:
         wt = times.get(stem)
         df = dfs.get(stem)
         su     = f"{baseline/wt:.2f}×" if wt and baseline else "—"
         wt_str = f"{wt:.1f}"           if wt              else "—"
         avg    = f"{df['sor_iters'].mean():.1f}" if df is not None else "—"
-        mx     = f"{df['sor_iters'].max()}"      if df is not None else "—"
-        print(f"  {label:<23} {wt_str:>10} {su:>10} {avg:>12} {mx:>12}")
+        mx_str = f"{df['sor_iters'].max()}"      if df is not None else "—"
+        print(f"  {label:<26} {wt_str:>10} {su:>10} {avg:>12} {mx_str:>12}")
     print()
 
 print("Done.")

@@ -115,3 +115,74 @@ class CG_Solver : public PressureSolver {
     void axpy(double alpha, const Matrix<double> &x, Matrix<double> &y,
               const std::vector<Cell *> &cells);
 };
+
+/**
+ * @brief Preconditioned Conjugate Gradient solver with Red-Black SSOR preconditioner.
+ *
+ * Design mirrors CG_Solver: iterate() performs the full PCG solve per
+ * timestep, calculate_residual() recomputes the L2-norm from the current
+ * pressure field — identical formula to CG_Solver::calculate_residual().
+ * No mean-pressure subtraction is applied; the Fredholm correction on RS
+ * in Fields::calculate_rs() is sufficient, matching SOR behaviour.
+ *
+ * Auxiliary vectors (_r, _d, _q, _z) are allocated once in the constructor
+ * with the same dimensions as the pressure matrix (size_x+2, size_y+2).
+ * Red/black cell lists are built once on the first iterate() call.
+ *
+ * The SSOR preconditioner M = (D+L)D⁻¹(D+Lᵀ) reduces κ(A) from O(N) to
+ * O(√N), cutting iterations from O(√N) to O(N^{1/4}).  Red-Black ordering
+ * ensures M = Mᵀ regardless of MPI domain decomposition — a requirement
+ * for PCG correctness.  apply_ssor() executes 4 passes (forward: red→black,
+ * backward: black→red), each followed by a halo exchange.
+ *
+ * Algorithm executed inside iterate() each timestep:
+ *   1.  r  = Δₕp - RS         initial residual (warm start from previous timestep)
+ *   2.  z  = apply_ssor(r)    preconditioned residual                [4 halos]
+ *   3.  d  = z                 first search direction
+ *   4.  ρ  = reduce_sum(r·z)  global M⁻¹-weighted dot product       [MPI]
+ *   5.  rr = reduce_sum(r·r)  global ‖r‖² for stopping criterion    [MPI]
+ *   Loop until √(rr/N) < eps:
+ *   a.  communicate(d)         halo exchange so stencil sees neighbours [MPI]
+ *   b.  q  = -Δₕd              matrix-vector product (A_cg = -Δₕ)
+ *   c.  dq = reduce_sum(d·q)  global dot product for step size       [MPI]
+ *   d.  α  = ρ / dq
+ *   e.  p += α·d               solution update
+ *   f.  r -= α·q               residual update
+ *   g.  z  = apply_ssor(r)    preconditioned new residual            [4 halos]
+ *   h.  ρ_new = reduce_sum(r·z)                                      [MPI]
+ *   i.  β  = ρ_new / ρ        conjugacy coefficient
+ *   j.  d  = z + β·d          new search direction  (z, not r — PCG)
+ *   k.  ρ  = ρ_new
+ *   l.  rr = reduce_sum(r·r)                                         [MPI]
+ */
+class PCG_SSOR : public PressureSolver {
+  public:
+    PCG_SSOR() = default;
+    PCG_SSOR(double tolerance, int max_iter, int nc, int nr);
+    virtual ~PCG_SSOR() = default;
+    void iterate(Fields &field, Grid &grid) override;
+    double calculate_residual(Fields &field, Grid &grid) override;
+    int last_iter_count() const { return _last_iter_count; }
+
+  private:
+    double _tolerance{0.0};
+    int    _max_iter{0};
+    int    _last_iter_count{0};
+
+    Matrix<double> _r; // residual:             r = Δₕp - RS
+    Matrix<double> _d; // search direction:     communicated before matvec
+    Matrix<double> _q; // matvec result:        q = -Δₕd
+    Matrix<double> _z; // preconditioned resid: z = M⁻¹r
+
+    std::vector<Cell *> _red_cells;    // cells where (i+j)%2 == 0
+    std::vector<Cell *> _black_cells;  // cells where (i+j)%2 == 1
+    bool _cells_partitioned{false};
+
+    // 4-pass Red-Black SSOR: solves M·z = r, stores result in z
+    void apply_ssor(const Matrix<double> &r, Matrix<double> &z, const Grid &grid);
+
+    double dot_local(const Matrix<double> &a, const Matrix<double> &b,
+                     const std::vector<Cell *> &cells);
+    void   axpy(double alpha, const Matrix<double> &x, Matrix<double> &y,
+                const std::vector<Cell *> &cells);
+};

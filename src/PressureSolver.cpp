@@ -159,3 +159,134 @@ double CG_Solver::calculate_residual(Fields &field, Grid &grid) {
     }
     return std::sqrt(rloc / static_cast<double>(grid.fluid_cells().size()));
 }
+
+// ---------------------------------------------------------------------------
+// PCG_SSOR — Preconditioned CG with Red-Black SSOR preconditioner
+// ---------------------------------------------------------------------------
+
+PCG_SSOR::PCG_SSOR(double tolerance, int max_iter, int nc, int nr)
+    : _tolerance(tolerance), _max_iter(max_iter),
+      _r(nc, nr, 0.0), _d(nc, nr, 0.0), _q(nc, nr, 0.0), _z(nc, nr, 0.0) {}
+
+double PCG_SSOR::dot_local(const Matrix<double> &a, const Matrix<double> &b,
+                            const std::vector<Cell *> &cells) {
+    double s = 0.0;
+    for (auto c : cells)
+        s += a(c->i(), c->j()) * b(c->i(), c->j());
+    return s;
+}
+
+void PCG_SSOR::axpy(double alpha, const Matrix<double> &x, Matrix<double> &y,
+                    const std::vector<Cell *> &cells) {
+    for (auto c : cells)
+        y(c->i(), c->j()) += alpha * x(c->i(), c->j());
+}
+
+void PCG_SSOR::apply_ssor(const Matrix<double> &r, Matrix<double> &z, const Grid &grid) {
+    const double dx   = grid.dx(), dy = grid.dy();
+    const double d_ii = 2.0 / (dx * dx) + 2.0 / (dy * dy);
+
+    for (auto c : _red_cells)   z(c->i(), c->j()) = 0.0;
+    for (auto c : _black_cells) z(c->i(), c->j()) = 0.0;
+
+    // Forward sweep: red then black
+    for (auto c : _red_cells) {
+        int i = c->i(), j = c->j();
+        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
+    }
+    Communication::communicate_field(z, grid.domain());
+
+    for (auto c : _black_cells) {
+        int i = c->i(), j = c->j();
+        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
+    }
+    Communication::communicate_field(z, grid.domain());
+
+    // Backward sweep: black then red (ensures M = Mᵀ → PCG correctness)
+    for (auto c : _black_cells) {
+        int i = c->i(), j = c->j();
+        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
+    }
+    Communication::communicate_field(z, grid.domain());
+
+    for (auto c : _red_cells) {
+        int i = c->i(), j = c->j();
+        z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
+    }
+    Communication::communicate_field(z, grid.domain());
+}
+
+void PCG_SSOR::iterate(Fields &field, Grid &grid) {
+    const auto  &cells    = grid.fluid_cells();
+    const double n_local  = static_cast<double>(cells.size());
+    const double n_global = Communication::reduce_sum(n_local);
+
+    // Build red/black cell lists once — coloring uses global (i,j), so it is
+    // identical across all MPI decompositions, guaranteeing M = Mᵀ.
+    if (!_cells_partitioned) {
+        for (auto c : cells) {
+            if ((c->i() + c->j()) % 2 == 0) _red_cells.push_back(c);
+            else                              _black_cells.push_back(c);
+        }
+        _cells_partitioned = true;
+    }
+
+    // Warm start: r = Δₕp - RS
+    for (auto c : cells) {
+        int i = c->i(), j = c->j();
+        _r(i, j) = Discretization::laplacian(field.p_matrix(), i, j) - field.rs(i, j);
+    }
+
+    apply_ssor(_r, _z, grid);
+
+    for (auto c : cells) {
+        int i = c->i(), j = c->j();
+        _d(i, j) = _z(i, j);
+    }
+
+    // ρ = (r,z) — M⁻¹-weighted dot product (replaces (r,r) from plain CG)
+    double rz = Communication::reduce_sum(dot_local(_r, _z, cells));
+    double rr = Communication::reduce_sum(dot_local(_r, _r, cells));
+
+    _last_iter_count = 0;
+    for (int iter = 0; iter < _max_iter && std::sqrt(rr / n_global) > _tolerance; ++iter) {
+
+        Communication::communicate_field(_d, grid.domain());
+
+        for (auto c : cells) {
+            int i = c->i(), j = c->j();
+            _q(i, j) = -Discretization::laplacian(_d, i, j);
+        }
+
+        const double dq    = Communication::reduce_sum(dot_local(_d, _q, cells));
+        const double alpha = rz / dq;
+
+        axpy( alpha, _d, field.p_matrix(), cells);
+        axpy(-alpha, _q, _r,               cells);
+
+        apply_ssor(_r, _z, grid);
+
+        const double rz_new = Communication::reduce_sum(dot_local(_r, _z, cells));
+        const double beta   = rz_new / rz;
+
+        // d = z + β·d  (z, not r — key PCG difference from plain CG)
+        for (auto c : cells) {
+            int i = c->i(), j = c->j();
+            _d(i, j) = _z(i, j) + beta * _d(i, j);
+        }
+
+        rz = rz_new;
+        rr = Communication::reduce_sum(dot_local(_r, _r, cells));
+        ++_last_iter_count;
+    }
+}
+
+double PCG_SSOR::calculate_residual(Fields &field, Grid &grid) {
+    double rloc = 0.0;
+    for (auto c : grid.fluid_cells()) {
+        int i = c->i(), j = c->j();
+        const double val = Discretization::laplacian(field.p_matrix(), i, j) - field.rs(i, j);
+        rloc += val * val;
+    }
+    return std::sqrt(rloc / static_cast<double>(grid.fluid_cells().size()));
+}
