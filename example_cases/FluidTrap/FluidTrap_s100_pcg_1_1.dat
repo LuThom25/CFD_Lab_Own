@@ -28,3 +28,4 @@ wall_temp_4  0.5
 wall_temp_5  -0.5
 iproc        1
 jproc        1
+omega_pcg          1.5

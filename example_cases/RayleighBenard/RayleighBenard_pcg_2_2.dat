@@ -28,3 +28,4 @@ wall_temp_5  291.20
 iproc        2
 jproc        2
 solver       PCG_SSOR
+omega_pcg          1.5

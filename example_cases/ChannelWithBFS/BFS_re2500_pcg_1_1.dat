@@ -1,0 +1,36 @@
+geo_file     BFS_large.pgm
+
+xlength      20
+ylength      4
+
+imax         200
+jmax         40
+
+dt           0.05
+t_end        200.0
+tau          0.5
+
+dt_value     20.0
+
+itermax      500
+eps          0.001
+omg          1.7
+gamma        0.5
+
+nu           0.0004
+
+GX           0.0
+GY           0.0
+
+PI           0.0
+UI           0.5
+VI           0.0
+UIN          0.5
+VIN          0.0
+
+num_of_walls 0
+
+solver       PCG_SSOR
+
+iproc        1
+jproc        1
