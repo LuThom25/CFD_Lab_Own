@@ -47,6 +47,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
     int jmax{};       /* number of cells y-direction*/
     double gamma{};   /* uppwind differencing factor*/
     double omg{};     /* relaxation factor */
+    int cold_start{0}; /* if 1: reset p=0 before each pressure solve */
     double tau{};     /* safety factor for time step*/
     int itermax{};    /* max. number of iterations for pressure per time step */
     double eps{};     /* accuracy bound for pressure*/
@@ -71,6 +72,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
                 if (var == "t_end") file >> _t_end;
                 if (var == "dt") file >> dt;
                 if (var == "omg") file >> omg;
+                if (var == "cold_start") file >> cold_start;
                 if (var == "eps") file >> eps;
                 if (var == "tau") file >> tau;
                 if (var == "gamma") file >> gamma;
@@ -208,6 +210,7 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
     _tolerance = eps;
     _nu = nu;
     _omg = omg;
+    _cold_start = (cold_start != 0);
 
     // Construct boundaries
     if (not _grid.moving_wall_cells().empty()) {
@@ -361,6 +364,11 @@ void Case::simulate() { // Inialize variables
         _field.calculate_rs(_grid);
 
         // Step 5: SOR pressure solve: iterate until res < eps or itermax reached
+        // Cold start: reset pressure to zero before each solve
+        if (_cold_start) {
+            for (auto c : _grid.fluid_cells())
+                _field.p(c->i(), c->j()) = 0.0;
+        }
         // Initialize SOR stopping criteria
         int iter = 0;
         double residual = std::numeric_limits<double>::max();

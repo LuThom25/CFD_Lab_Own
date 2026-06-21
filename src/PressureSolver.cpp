@@ -190,21 +190,21 @@ void PCG_SSOR::apply_ssor(const Matrix<double> &r, Matrix<double> &z, const Grid
     for (auto c : _red_cells)   z(c->i(), c->j()) = 0.0;
     for (auto c : _black_cells) z(c->i(), c->j()) = 0.0;
 
-    // Forward sweep: red then black
+    // Forward red
     for (auto c : _red_cells) {
         int i = c->i(), j = c->j();
         z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
     }
     Communication::communicate_field(z, grid.domain());
 
+    // Forward black
     for (auto c : _black_cells) {
         int i = c->i(), j = c->j();
         z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;
     }
     Communication::communicate_field(z, grid.domain());
 
-    // Fix A: backward-black removed (no-op — black reads only red neighbours,
-    // which have not changed since Pass 1). Saves 1 loop + 1 communicate/apply_ssor.
+    // Backward red (Fix A: backward-black omitted — no-op)
     for (auto c : _red_cells) {
         int i = c->i(), j = c->j();
         z(i, j) = (r(i, j) + Discretization::sor_helper(z, i, j)) / d_ii;

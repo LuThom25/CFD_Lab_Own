@@ -71,6 +71,8 @@ class Case {
     double _nu{0.0};
     /// SOR relaxation factor (stored for console output)
     double _omg{0.0};
+    /// Cold-start flag: if true, reset p=0 before each pressure solve
+    bool _cold_start{false};
     /// Name of the active pressure solver (stored for console output)
     std::string _solver_name{"SOR"};
 
