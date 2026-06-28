@@ -1007,14 +1007,17 @@ void Eigen_CG::setup(Grid &grid) {
     // call happens only once — not every timestep, unlike if solver were local.
     _solver.setMaxIterations(_max_iter);
     _solver.compute(_A);
-    _setup_done = true;
+    _is_initialized = true;
 }
 
 // ---------------------------------------------------------------------------
 // iterate() — called every timestep, mirrors CG_Solver::iterate() step by step.
 // ---------------------------------------------------------------------------
 void Eigen_CG::iterate(Fields &field, Grid &grid) {
-    if (!_setup_done) setup(grid);  // lazy init on first call
+    // Build sparse matrix and configure solver on first call; Grid is required
+    // for the fluid cell list and grid spacing, which are unavailable at
+    // construction time.
+    if (!_is_initialized) setup(grid);
 
     const auto &cells = grid.fluid_cells();
 

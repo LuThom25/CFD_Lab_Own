@@ -161,7 +161,10 @@ class Eigen_CG : public PressureSolver {
     double _tolerance;
     int    _max_iter;
     int    _last_iter_count{0};
-    bool   _setup_done{false};
+    // Set to true after the first iterate() call has built the sparse matrix.
+    // setup() requires a Grid object (fluid cell list, spacing) which is not
+    // available at construction time, so initialisation is deferred.
+    bool   _is_initialized{false};
 
     // Assembled once in setup(); grid is static so A never changes.
     Eigen::SparseMatrix<double> _A;
@@ -185,6 +188,9 @@ class Eigen_CG : public PressureSolver {
     double _dx2{0.0};
     double _dy2{0.0};
 
+    // Called once on the first iterate() invocation.  Builds _A, _idx, and
+    // configures _solver.  Requires Grid because the fluid cell list and grid
+    // spacing are not known at construction time.
     void setup(Grid &grid);
 };
 #endif // USE_EIGEN
