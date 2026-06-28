@@ -1093,6 +1093,11 @@ void Eigen_CG::iterate(Fields &field, Grid &grid) {
         ? _tolerance * std::sqrt(static_cast<double>(_N)) / b_norm
         : _tolerance);
 
+    // solveWithGuess(b, x): plain CG — no SOR, no preconditioner.
+    // The second argument x is the warm-start vector (field.p from the previous
+    // timestep), so CG starts from x₀ = p_old instead of x₀ = 0.
+    // This keeps the initial residual r₀ = b - A·x₀ tiny and lets CG exit
+    // in 0–2 iterations once the flow is established.
     x = _solver.solveWithGuess(b, x);
 
     // Store iteration count for CSV logging (same as CG_Solver's _last_iter_count).
