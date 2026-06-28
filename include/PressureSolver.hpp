@@ -1,6 +1,11 @@
 #pragma once
 
 #include <utility>
+#include <vector>
+
+#ifdef USE_EIGEN
+#include <Eigen/Sparse>
+#endif
 
 #include "Boundary.hpp"
 #include "Fields.hpp"
@@ -115,6 +120,74 @@ class CG_Solver : public PressureSolver {
     void axpy(double alpha, const Matrix<double> &x, Matrix<double> &y,
               const std::vector<Cell *> &cells);
 };
+
+#ifdef USE_EIGEN
+/**
+ * @brief Eigen::ConjugateGradient wrapper — identical interface to CG_Solver.
+ *
+ * Delegates the linear solve to Eigen's built-in CG with IdentityPreconditioner
+ * (no preconditioning), making it a 1-to-1 algorithmic reference for CG_Solver.
+ * Serial only (Eigen has no MPI support); valid for 1×1 decomposition.
+ *
+ * Matrix assembly (setup): the 5-point Laplace operator is assembled once as an
+ * Eigen::SparseMatrix<double> using the same stencil coefficients as
+ * Discretization::laplacian().  Fluid cells are numbered 0..N-1 via _idx map;
+ * obstacle cells are excluded from the system (same convention as CG_Solver
+ * which skips non-fluid cells in all loops).
+ *
+ * iterate() mirrors CG_Solver::iterate() step by step:
+ *   1.  Build RHS b from field.rs()           — same as CG_Solver initial r
+ *   2.  Build initial guess x from field.p()  — warm start, same as CG_Solver
+ *   3.  Set tolerance: solver.setTolerance(_tolerance / sqrt(N))
+ *       so Eigen's ‖r‖₂ < tol*‖b‖₂ matches our sqrt(rr/N) < eps criterion
+ *   4.  solver.solveWithGuess(b, x)           — Eigen CG loop
+ *   5.  Write x back to field.p()
+ *
+ * calculate_residual(): identical formula to CG_Solver::calculate_residual(),
+ * recomputed from the current field.p() via Discretization::laplacian().
+ */
+class Eigen_CG : public PressureSolver {
+  public:
+    // Same constructor signature as CG_Solver — nc/nr are p_matrix dimensions.
+    Eigen_CG(double tolerance, int max_iter, int nc, int nr);
+    ~Eigen_CG() = default;
+
+    void iterate(Fields &field, Grid &grid) override;
+    double calculate_residual(Fields &field, Grid &grid) override;
+
+    int last_iter_count() const { return _last_iter_count; }
+
+  private:
+    double _tolerance;
+    int    _max_iter;
+    int    _last_iter_count{0};
+    bool   _setup_done{false};
+
+    // Assembled once in setup(); grid is static so A never changes.
+    Eigen::SparseMatrix<double> _A;
+
+    // Solver kept as member so compute() (symbolic+numeric factorisation of the
+    // preconditioner) is called only once in setup(), not every timestep.
+    Eigen::ConjugateGradient<Eigen::SparseMatrix<double>,
+                             Eigen::Lower | Eigen::Upper,
+                             Eigen::IdentityPreconditioner> _solver;
+
+    // Flat index map: _idx[i * _stride + j] = row in _A.
+    // _stride = number of j-indices per row (domain_jmax + 2).
+    // Avoids magic numbers; O(1) lookup without hash overhead.
+    std::vector<int> _idx;
+    int _stride{0};
+
+    // Total number of fluid cells = size of the linear system.
+    int _N{0};
+
+    // Grid spacing squared — needed every timestep to add BC contributions to b.
+    double _dx2{0.0};
+    double _dy2{0.0};
+
+    void setup(Grid &grid);
+};
+#endif // USE_EIGEN
 
 /**
  * @brief Preconditioned Conjugate Gradient solver with Red-Black SSOR preconditioner.

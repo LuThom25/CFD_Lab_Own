@@ -4,6 +4,11 @@
 #include "Communication.hpp"
 #include "PressureSolver.hpp"
 
+#ifdef USE_EIGEN
+#include <Eigen/Sparse>
+#include <Eigen/IterativeLinearSolvers>
+#endif
+
 SOR_Standard::SOR_Standard(double omega) : _omega(omega) {}
 
 // We divide into update method and residual calculation method. This way the residual
@@ -901,3 +906,224 @@ double PCG_MG::calculate_residual(Fields &field, Grid &grid) {
     }
     return std::sqrt(rloc / static_cast<double>(grid.fluid_cells().size()));
 }
+
+// =============================================================================
+// Eigen_CG — Eigen::ConjugateGradient reference solver (serial, 1×1 only)
+//
+// Purpose: identical algorithm to CG_Solver, but delegated to Eigen's
+// optimised sparse CG so we can benchmark our hand-written implementation
+// against an established reference library.
+// Restriction: Eigen has no MPI support → only valid for iproc=jproc=1.
+// =============================================================================
+#ifdef USE_EIGEN
+
+// ---------------------------------------------------------------------------
+// Constructor
+// Same signature as CG_Solver(tolerance, max_iter, nc, nr).
+// nc/nr are the padded p_matrix dimensions; Eigen_CG does not pre-allocate
+// auxiliary matrices from them — the system size N is determined from
+// fluid_cells() in setup(), exactly as CG_Solver's loops skip non-fluid cells.
+// ---------------------------------------------------------------------------
+Eigen_CG::Eigen_CG(double tolerance, int max_iter, int /*nc*/, int /*nr*/)
+    : _tolerance(tolerance), _max_iter(max_iter) {}
+
+// ---------------------------------------------------------------------------
+// setup() — called once on the first iterate(), never again.
+//
+// CG_Solver has no setup phase: it applies the Laplacian stencil on-the-fly
+// via Discretization::laplacian() inside the iteration loop.  Eigen's CG
+// requires an explicit matrix object, so we assemble A once here and reuse
+// it every timestep.  The stencil coefficients are identical to those inside
+// Discretization::laplacian() — only the representation differs.
+// ---------------------------------------------------------------------------
+void Eigen_CG::setup(Grid &grid) {
+    const double dx2    = grid.dx() * grid.dx();
+    const double dy2    = grid.dy() * grid.dy();
+    _dx2 = dx2;
+    _dy2 = dy2;
+    // Diagonal entry of A_cg = -Δₕ.  Same value that Discretization::laplacian
+    // would subtract from the centre cell when computing A_cg * p.
+    const double center = 2.0 / dx2 + 2.0 / dy2;
+
+    const auto &cells = grid.fluid_cells();
+    _N = static_cast<int>(cells.size());  // size of the linear system
+
+    // --- Index map: grid (i,j) → row index in A ---
+    // CG_Solver works directly with Matrix<double>(i,j) and iterates over
+    // fluid_cells() — no explicit numbering needed.  Eigen needs a dense
+    // vector of length N, so we must assign each fluid cell a unique index.
+    //
+    // _idx is a flat array sized (imax+2) × (jmax+2), matching the padded
+    // p_matrix layout.  _stride = jmax+2 so _idx[i*_stride+j] maps (i,j)
+    // to a row — same formula as Matrix<double>'s internal indexing, so no
+    // magic numbers and no hash collisions.  Non-fluid entries stay at -1.
+    _stride = grid.domain().domain_jmax + 2;
+    _idx.assign(static_cast<size_t>((grid.domain().domain_imax + 2) * _stride), -1);
+    int row = 0;
+    for (auto c : cells)
+        _idx[static_cast<size_t>(c->i() * _stride + c->j())] = row++;
+
+    // --- Assemble sparse matrix A in triplet (COO) format ---
+    // Each fluid cell contributes up to 5 entries: the diagonal and up to 4
+    // off-diagonals.  This is the explicit form of q = A_cg * d = -Δₕd that
+    // CG_Solver computes implicitly via Discretization::laplacian(_d, i, j).
+    //
+    // Non-fluid neighbours (obstacle/ghost cells) have _idx = -1 and are
+    // skipped — equivalent to CG_Solver reading p=0 from those cells because
+    // BCs hold them at zero, so they contribute nothing to the stencil sum.
+    _A.resize(_N, _N);
+    std::vector<Eigen::Triplet<double>> triplets;
+    triplets.reserve(5 * _N);  // at most 5 non-zeros per row
+
+    for (auto c : cells) {
+        int i = c->i();
+        int j = c->j();
+        int r = _idx[static_cast<size_t>(i * _stride + j)];
+
+        // Diagonal: centre coefficient of -Δₕ (positive → A_cg is SPD → CG converges)
+        triplets.emplace_back(r, r, center);
+
+        // Off-diagonals: -1/dx² or -1/dy² for each fluid neighbour.
+        // The sign is negative because A_cg = -Δₕ flips the off-diagonal sign
+        // relative to the raw finite-difference stencil.
+        auto add_nb = [&](int ni, int nj, double coeff) {
+            int col = _idx[static_cast<size_t>(ni * _stride + nj)];
+            if (col >= 0)  // skip if neighbour is obstacle or ghost cell
+                triplets.emplace_back(r, col, -coeff);
+        };
+        add_nb(i - 1, j,     1.0 / dx2);  // left
+        add_nb(i + 1, j,     1.0 / dx2);  // right
+        add_nb(i,     j - 1, 1.0 / dy2);  // bottom
+        add_nb(i,     j + 1, 1.0 / dy2);  // top
+    }
+
+    // Convert triplets → compressed sparse column format (CSC) used by Eigen.
+    // Duplicate entries are summed automatically (none here, but good practice).
+    _A.setFromTriplets(triplets.begin(), triplets.end());
+
+    // compute() analyses the sparsity pattern and prepares the preconditioner.
+    // For IdentityPreconditioner this is essentially a no-op, but it must be
+    // called before solveWithGuess().  Keeping _solver as a member means this
+    // call happens only once — not every timestep, unlike if solver were local.
+    _solver.setMaxIterations(_max_iter);
+    _solver.compute(_A);
+    _setup_done = true;
+}
+
+// ---------------------------------------------------------------------------
+// iterate() — called every timestep, mirrors CG_Solver::iterate() step by step.
+// ---------------------------------------------------------------------------
+void Eigen_CG::iterate(Fields &field, Grid &grid) {
+    if (!_setup_done) setup(grid);  // lazy init on first call
+
+    const auto &cells = grid.fluid_cells();
+
+    // --- Build RHS b and initial guess x ---
+    // CG_Solver works in-place: it computes r = Δₕp - RS directly into _r.
+    // Eigen needs flat VectorXd.  The system being solved is A_cg · p = b
+    // with A_cg = -Δₕ (positive definite).  The residual identity gives:
+    //   r = b - A_cg · p  =  b + Δₕp
+    // CG_Solver's initial residual is r = Δₕp - RS, so b = -RS.
+    // Using +RS would solve A_cg · p = +RS → solution is -p_true (sign-flipped).
+    // That bug is hidden by warm-start (0 iterations → p unchanged) but would
+    // produce wrong results on cold start.
+    //
+    // x(k) = p(i,j): warm start — reuse pressure from previous timestep.
+    // With the correct b = -RS: r₀ = -RS + Δₕp_prev ≈ 0 (since Δₕp_prev ≈ RS
+    // from the previous solve), so Eigen exits in 0 iterations, identical to
+    // CG_Solver which also checks sqrt(rr/N) < eps before the first iteration.
+    // Build RHS b and initial guess x.
+    //
+    // CG_Solver computes r₀ = Δₕ(field.p_matrix(), i, j) - RS, which reads ALL
+    // neighbours including ghost/boundary cells whose p is set by BCs (e.g. Neumann:
+    // p_ghost = p_adjacent).  Eigen's internal r₀ = b - A*x skips non-fluid cells
+    // because they are absent from A.  Without correction these residuals differ and
+    // warm-start fails despite equivalent tolerances.
+    //
+    // Fix: for every non-fluid neighbour of a fluid cell add p(nb)/h² to b.
+    // This makes Eigen's r₀ = b - A*x identical to CG_Solver's laplacian(p) - RS:
+    //   b(k) - (A*x)(k) = [-RS + Σ_nonfluid p(nb)/h²] - [center*p - Σ_fluid p(nb)/h²]
+    //                    = -RS + Σ_ALL p(nb)/h² - center*p
+    //                    = Δₕ(p, i, j) - RS  ✓
+    //
+    // b must be rebuilt each timestep because ghost/BC pressures change.
+    Eigen::VectorXd b(_N), x(_N);
+    for (auto c : cells) {
+        int i = c->i(), j = c->j();
+        int k = _idx[static_cast<size_t>(i * _stride + j)];
+
+        double rhs = -field.rs(i, j);
+
+        // Add Neumann/obstacle-cell contributions that Discretization::laplacian()
+        // picks up naturally but Eigen's matrix skips.
+        auto add_bc = [&](int ni, int nj, double inv_h2) {
+            if (_idx[static_cast<size_t>(ni * _stride + nj)] < 0)
+                rhs += field.p(ni, nj) * inv_h2;
+        };
+        const double idx2 = 1.0 / _dx2;
+        const double idy2 = 1.0 / _dy2;
+        add_bc(i - 1, j,     idx2);
+        add_bc(i + 1, j,     idx2);
+        add_bc(i,     j - 1, idy2);
+        add_bc(i,     j + 1, idy2);
+
+        b(k) = rhs;
+        x(k) = field.p(i, j);   // warm start
+    }
+
+    // --- Tolerance conversion ---
+    // CG_Solver stops when sqrt(rr / N_global) < _tolerance  (absolute L2-norm).
+    // Eigen stops when ‖r‖₂ < tol * ‖b‖₂                   (relative L2-norm).
+    //
+    // Mathematically equivalent conversion:
+    //   CG_Solver: ‖r‖₂ / sqrt(N) < eps  →  ‖r‖₂ < eps * sqrt(N)
+    //   Eigen:     ‖r‖₂ < tol * ‖b‖₂
+    //   → tol = eps * sqrt(N) / ‖b‖₂
+    //
+    // This is the best possible match given Eigen's API.  A ±1 iteration
+    // difference vs CG_Solver is possible because Eigen places its convergence
+    // check internally (after the update) while CG_Solver checks at the top of
+    // the loop (before the update).  This is a known limitation when comparing
+    // two CG implementations via a black-box tolerance interface.
+    //
+    // Edge case: ‖b‖₂ ≈ 0 means RS ≈ 0 (trivially converged system).
+    // Pass _tolerance directly so Eigen exits in 0 iterations.
+    const double b_norm = b.norm();
+    _solver.setTolerance(b_norm > 1e-300
+        ? _tolerance * std::sqrt(static_cast<double>(_N)) / b_norm
+        : _tolerance);
+
+    x = _solver.solveWithGuess(b, x);
+
+    // Store iteration count for CSV logging (same as CG_Solver's _last_iter_count).
+    _last_iter_count = static_cast<int>(_solver.iterations());
+
+    // --- Write solution back to field.p() ---
+    // CG_Solver updates field.p_matrix() in-place via axpy(), so no copy-back
+    // is needed there.  Here we must copy x → field.p() explicitly because
+    // Eigen operates on its own VectorXd, not on the Matrix<double> directly.
+    // Only fluid cells are written; obstacle/ghost cells are left unchanged —
+    // BCs are reapplied by Case.cpp after iterate() returns, same as CG_Solver.
+    for (auto c : cells) {
+        int k = _idx[static_cast<size_t>(c->i() * _stride + c->j())];
+        field.p(c->i(), c->j()) = x(k);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// calculate_residual() — byte-identical to CG_Solver::calculate_residual().
+// Recomputes sqrt(rr/N) from the current field.p() via Discretization::laplacian().
+// Case.cpp calls this after iterate() and applies BCs first, so field.p() is
+// already the post-solve, post-BC pressure when this runs.
+// ---------------------------------------------------------------------------
+double Eigen_CG::calculate_residual(Fields &field, Grid &grid) {
+    double rloc = 0.0;
+    for (auto c : grid.fluid_cells()) {
+        int i = c->i(), j = c->j();
+        double val = Discretization::laplacian(field.p_matrix(), i, j) - field.rs(i, j);
+        rloc += val * val;
+    }
+    return std::sqrt(rloc / static_cast<double>(grid.fluid_cells().size()));
+}
+
+#endif // USE_EIGEN
