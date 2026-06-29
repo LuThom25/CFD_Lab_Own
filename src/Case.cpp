@@ -209,6 +209,11 @@ Case::Case(std::string file_name, int /*argn*/, char ** /*args*/, int size, int 
             eps, itermax,
             _field.p_matrix().num_cols(),
             _field.p_matrix().num_rows());
+    } else if (_solver_name == "EIGEN_PCG") {
+        _pressure_solver = std::make_unique<Eigen_PCG>(
+            eps, itermax,
+            _field.p_matrix().num_cols(),
+            _field.p_matrix().num_rows());
 #endif
     } else {
         _pressure_solver = std::make_unique<SOR_Standard>(omg);
@@ -313,6 +318,8 @@ void Case::simulate() { // Inialize variables
 #ifdef USE_EIGEN
     Eigen_CG         *ecg_ptr  = (_solver_name == "EIGEN_CG")
                                ? dynamic_cast<Eigen_CG        *>(_pressure_solver.get()) : nullptr;
+    Eigen_PCG        *epcg_ptr = (_solver_name == "EIGEN_PCG")
+                               ? dynamic_cast<Eigen_PCG       *>(_pressure_solver.get()) : nullptr;
 #endif
     const double t_wall_start = MPI_Wtime();
     std::ofstream solver_log;
@@ -423,6 +430,7 @@ void Case::simulate() { // Inialize variables
                           : mg_ptr   ? mg_ptr->last_iter_count()
 #ifdef USE_EIGEN
                           : ecg_ptr  ? ecg_ptr->last_iter_count()
+                          : epcg_ptr ? epcg_ptr->last_iter_count()
 #endif
                           : iter;
             if (_my_rank == 0)

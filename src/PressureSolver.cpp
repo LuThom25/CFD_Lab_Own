@@ -924,7 +924,8 @@ double PCG_MG::calculate_residual(Fields &field, Grid &grid) {
 // auxiliary matrices from them — the system size N is determined from
 // fluid_cells() in setup(), exactly as CG_Solver's loops skip non-fluid cells.
 // ---------------------------------------------------------------------------
-Eigen_CG::Eigen_CG(double tolerance, int max_iter, int /*nc*/, int /*nr*/)
+template <typename Preconditioner>
+Eigen_CG_Base<Preconditioner>::Eigen_CG_Base(double tolerance, int max_iter, int /*nc*/, int /*nr*/)
     : _tolerance(tolerance), _max_iter(max_iter) {}
 
 // ---------------------------------------------------------------------------
@@ -936,7 +937,8 @@ Eigen_CG::Eigen_CG(double tolerance, int max_iter, int /*nc*/, int /*nr*/)
 // it every timestep.  The stencil coefficients are identical to those inside
 // Discretization::laplacian() — only the representation differs.
 // ---------------------------------------------------------------------------
-void Eigen_CG::setup(Grid &grid) {
+template <typename Preconditioner>
+void Eigen_CG_Base<Preconditioner>::setup(Grid &grid) {
     const double dx2    = grid.dx() * grid.dx();
     const double dy2    = grid.dy() * grid.dy();
     _dx2 = dx2;
@@ -1013,7 +1015,8 @@ void Eigen_CG::setup(Grid &grid) {
 // ---------------------------------------------------------------------------
 // iterate() — called every timestep, mirrors CG_Solver::iterate() step by step.
 // ---------------------------------------------------------------------------
-void Eigen_CG::iterate(Fields &field, Grid &grid) {
+template <typename Preconditioner>
+void Eigen_CG_Base<Preconditioner>::iterate(Fields &field, Grid &grid) {
     // Build sparse matrix and configure solver on first call; Grid is required
     // for the fluid cell list and grid spacing, which are unavailable at
     // construction time.
@@ -1124,7 +1127,8 @@ void Eigen_CG::iterate(Fields &field, Grid &grid) {
 // Case.cpp calls this after iterate() and applies BCs first, so field.p() is
 // already the post-solve, post-BC pressure when this runs.
 // ---------------------------------------------------------------------------
-double Eigen_CG::calculate_residual(Fields &field, Grid &grid) {
+template <typename Preconditioner>
+double Eigen_CG_Base<Preconditioner>::calculate_residual(Fields &field, Grid &grid) {
     double rloc = 0.0;
     for (auto c : grid.fluid_cells()) {
         int i = c->i(), j = c->j();
@@ -1133,5 +1137,9 @@ double Eigen_CG::calculate_residual(Fields &field, Grid &grid) {
     }
     return std::sqrt(rloc / static_cast<double>(grid.fluid_cells().size()));
 }
+
+// Explicit instantiations so the linker finds both variants.
+template class Eigen_CG_Base<Eigen::IdentityPreconditioner>;
+template class Eigen_CG_Base<Eigen::IncompleteCholesky<double>>;
 
 #endif // USE_EIGEN

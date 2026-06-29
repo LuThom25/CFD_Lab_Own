@@ -146,11 +146,12 @@ class CG_Solver : public PressureSolver {
  * calculate_residual(): identical formula to CG_Solver::calculate_residual(),
  * recomputed from the current field.p() via Discretization::laplacian().
  */
-class Eigen_CG : public PressureSolver {
+template <typename Preconditioner = Eigen::IdentityPreconditioner>
+class Eigen_CG_Base : public PressureSolver {
   public:
     // Same constructor signature as CG_Solver — nc/nr are p_matrix dimensions.
-    Eigen_CG(double tolerance, int max_iter, int nc, int nr);
-    ~Eigen_CG() = default;
+    Eigen_CG_Base(double tolerance, int max_iter, int nc, int nr);
+    ~Eigen_CG_Base() = default;
 
     void iterate(Fields &field, Grid &grid) override;
     double calculate_residual(Fields &field, Grid &grid) override;
@@ -173,7 +174,7 @@ class Eigen_CG : public PressureSolver {
     // preconditioner) is called only once in setup(), not every timestep.
     Eigen::ConjugateGradient<Eigen::SparseMatrix<double>,
                              Eigen::Lower | Eigen::Upper,
-                             Eigen::IdentityPreconditioner> _solver;
+                             Preconditioner> _solver;
 
     // Flat index map: _idx[i * _stride + j] = row in _A.
     // _stride = number of j-indices per row (domain_jmax + 2).
@@ -193,6 +194,12 @@ class Eigen_CG : public PressureSolver {
     // spacing are not known at construction time.
     void setup(Grid &grid);
 };
+
+// Eigen_CG: unpreconditioned CG via Eigen (serial, 1x1 only).
+using Eigen_CG  = Eigen_CG_Base<Eigen::IdentityPreconditioner>;
+// Eigen_PCG: Eigen CG with Incomplete Cholesky preconditioner (serial, 1x1 only).
+using Eigen_PCG = Eigen_CG_Base<Eigen::IncompleteCholesky<double>>;
+
 #endif // USE_EIGEN
 
 /**
