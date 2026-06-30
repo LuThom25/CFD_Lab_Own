@@ -49,7 +49,7 @@ dt_value     5.0
 # gamma=0.5: upwind blending factor for convective terms (0=central, 1=full upwind)
 #            0.5 balances accuracy and stability at Re=200
 #--------------------------------------------
-itermax      1000
+itermax      100
 eps          0.001
 omg          1.7
 gamma        0.5

@@ -141,7 +141,7 @@ dt_value    5.0
 #    gamma = 0.5: blend of both — good balance of accuracy and stability at Re = 200.
 #    Alternative: gamma = 0.9 for higher Re or coarser grids.
 # -----------------------------------------------------------------------------
-itermax     1000
+itermax     100
 eps         0.001
 omg         1.7
 gamma       0.5

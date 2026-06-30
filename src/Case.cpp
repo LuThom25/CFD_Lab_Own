@@ -433,9 +433,14 @@ void Case::simulate() { // Inialize variables
                           : epcg_ptr ? epcg_ptr->last_iter_count()
 #endif
                           : iter;
-            if (_my_rank == 0)
+            if (_my_rank == 0) {
                 solver_log << timestep + 1 << "," << std::fixed << std::setprecision(6) << t + dt << ","
                            << log_iters << "," << std::scientific << std::setprecision(6) << residual << "\n";
+                solver_log.flush();
+                std::cout << "[step " << timestep + 1 << "] t=" << std::fixed << std::setprecision(4) << t + dt
+                          << "/" << _t_end << "  iters=" << log_iters
+                          << "  residual=" << std::scientific << std::setprecision(3) << residual << std::endl;
+            }
         }
 
         // Step 6: Correct velocities using updated pressure

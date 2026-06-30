@@ -37,6 +37,16 @@ else()
     message(WARNING "OpenMP not found, parallelization will be disabled.")
 endif()
 
+# Eigen3 (optional, header-only) — adds USE_EIGEN define when found
+find_package(Eigen3 QUIET)
+if(Eigen3_FOUND)
+    message(STATUS "Eigen3 found: ${EIGEN3_VERSION}")
+    target_compile_definitions(fluidchen PRIVATE USE_EIGEN)
+    target_link_libraries(fluidchen PRIVATE Eigen3::Eigen)
+else()
+    message(STATUS "Eigen3 not found — EIGEN_CG solver disabled")
+endif()
+
 # Add include directory
 target_include_directories(fluidchen PUBLIC include)
 
