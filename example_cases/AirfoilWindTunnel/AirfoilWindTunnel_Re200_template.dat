@@ -220,52 +220,47 @@ num_of_walls 1
 #
 #  Available solvers:
 #
-#  SOR               — Successive Over-Relaxation.
-#                      The default fallback (used when no solver line is given
-#                      or an unknown name is specified).
-#                      Simple to understand, but slowest convergence O(N^1.5).
-#                      Controlled by omg. Works with any iproc x jproc.
+#  SOR            — Successive Over-Relaxation.
+#                   Default fallback (used when no solver line is given or an
+#                   unknown name is specified).
+#                   Simplest algorithm: updates each cell in sequence using the
+#                   latest available neighbour values, scaled by omg.
+#                   Convergence rate O(N^1.5) — slowest of all options.
+#                   Advantage: no dot-products, no global communication needed.
+#                   Works with any iproc x jproc decomposition.
 #
-#  CG_STANDARD       — Conjugate Gradient without preconditioner.
-#                      Faster than SOR for large grids (O(N) per iteration,
-#                      O(sqrt(N)) iterations).  MPI-compatible (any iproc x jproc).
+#  CG_STANDARD    — Conjugate Gradient without preconditioner.
+#                   Iterative Krylov method: builds an orthogonal search
+#                   direction each step so each step makes optimal progress.
+#                   Convergence in O(sqrt(N)) iterations vs O(N) for SOR.
+#                   No preconditioner means each iteration is cheap but more
+#                   iterations are needed than PCG_SSOR.
+#                   MPI-compatible (any iproc x jproc).
 #
-#  PCG_SSOR          — Preconditioned CG with SSOR (Symmetric SOR) preconditioner.
-#                      Best convergence of all hand-written solvers for this grid.
-#                      Typically 3–5x fewer iterations than CG_STANDARD.
-#                      MPI-compatible (any iproc x jproc).
+#  PCG_SSOR       — Preconditioned Conjugate Gradient with SSOR preconditioner.
+#                   SSOR (Symmetric Successive Over-Relaxation) approximates
+#                   the inverse of the system matrix cheaply (one forward +
+#                   one backward sweep per iteration), dramatically reducing
+#                   the condition number and thus the iteration count.
+#                   Typically 3–5x fewer iterations than CG_STANDARD.
+#                   Best convergence of all hand-written solvers for this case.
+#                   MPI-compatible (any iproc x jproc).
 #
-#  PCG_SSOR_SERIAL   — Same algorithm as PCG_SSOR but serial implementation.
-#                      Use only with iproc = jproc = 1.
+#  EIGEN_CG       — CG solver from the Eigen library (serial only).
+#                   Uses Eigen's optimised sparse matrix routines internally.
+#                   Requires iproc = jproc = 1.
 #
-#  PCG_JACOBI        — Preconditioned CG with Jacobi (diagonal scaling) preconditioner.
-#                      Simpler preconditioner than SSOR, slightly less effective.
-#                      MPI-compatible (any iproc x jproc).
-#
-#  PCG_RBLU          — Preconditioned CG with Red-Black LU preconditioner.
-#                      Strong preconditioner, good for anisotropic problems.
-#                      MPI-compatible (any iproc x jproc).
-#
-#  PCG_MG            — Preconditioned CG with Multigrid preconditioner.
-#                      Theoretically O(N) overall (grid-independent convergence).
-#                      MPI-compatible (any iproc x jproc).
-#
-#  EIGEN_CG          — CG solver from the Eigen library (serial, 1x1 only).
-#                      Requires iproc = jproc = 1.
-#
-#  EIGEN_PCG         — PCG with Incomplete Cholesky preconditioner (Eigen library).
-#                      Requires iproc = jproc = 1.
-#                      Typically the fastest serial solver for this problem.
+#  EIGEN_PCG_IC   — PCG with Incomplete Cholesky preconditioner (Eigen library).
+#                   Incomplete Cholesky is a stronger preconditioner than SSOR
+#                   for ill-conditioned systems, yielding fewer iterations.
+#                   Typically the fastest serial solver for this problem size.
+#                   Requires iproc = jproc = 1.
 # =============================================================================
 # solver    SOR
 # solver    CG_STANDARD
 # solver    PCG_SSOR
-# solver    PCG_SSOR_SERIAL
-# solver    PCG_JACOBI
-# solver    PCG_RBLU
-# solver    PCG_MG
 # solver    EIGEN_CG
-# solver    EIGEN_PCG
+# solver    EIGEN_PCG_IC
 
 
 # -----------------------------------------------------------------------------
