@@ -1,0 +1,287 @@
+# =============================================================================
+#  AirfoilWindTunnel — Configuration Template
+#  NACA 0012 airfoil, angle of attack alpha = 0 deg (change geo_file for other alphas)
+#  Reynolds number Re = 200  (laminar, steady-state)
+#
+#  Generated geometry files (run generate_airfoil_pgm.py first):
+#    AirfoilWindTunnel.pgm          alpha =  0 deg
+#    AirfoilWindTunnel_alpha5.pgm   alpha =  5 deg
+#    AirfoilWindTunnel_alpha10.pgm  alpha = 10 deg
+#    AirfoilWindTunnel_alpha15.pgm  alpha = 15 deg
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+#  Geometry file
+#  The PGM file encodes the domain cell types as greyscale pixel values:
+#    0 = fluid,  1 = inflow,  2 = outflow,  3 = wall (airfoil + channel walls)
+#  Change this line to switch between angle-of-attack cases.
+# -----------------------------------------------------------------------------
+geo_file    AirfoilWindTunnel.pgm
+
+
+# -----------------------------------------------------------------------------
+#  Physical domain size  [non-dimensional units]
+#
+#  xlength = 4.0:
+#    Physical length of the channel.
+#    Grid spacing: dx = xlength / imax = 4.0 / 200 = 0.02
+#    Physical chord: c = CHORD_cells * dx = 80 * 0.02 = 1.6
+#    Domain is ~2.5c upstream + 1c chord + ~0.5c downstream = ~4c total.
+#    2.5c upstream is the minimum to avoid the inflow boundary influencing
+#    the pressure field around the airfoil.
+#    Alternative: xlength = 8.0 (4c upstream, 3c downstream) for better
+#    far-field accuracy — but doubles the cell count.
+#
+#  ylength = 1.6:
+#    Physical height of the channel = 1.0 * c = 1.6.
+#    Blockage ratio ≈ max_thickness / ylength = 0.12*1.6 / 1.6 = 12%
+#    (note: full channel height, not half)
+#    A smaller channel increases blockage and accelerates flow above/below
+#    the airfoil, artificially raising lift and lowering drag.
+#    Alternative: ylength = 3.2 (2c height) reduces blockage to ~6% but
+#    doubles jmax and costs 2x computation.
+# -----------------------------------------------------------------------------
+xlength     4.0
+ylength     1.6
+
+
+# -----------------------------------------------------------------------------
+#  Grid resolution
+#
+#  imax = 200, jmax = 80:
+#    Chosen so the chord spans exactly 80 interior cells (CHORD = 80).
+#    Maximum airfoil half-thickness = 6% * 80 = 4.8 cells → ~10 cells
+#    full thickness at mid-chord.  10 cells is the practical minimum to
+#    capture the velocity profile across the boundary layer at Re = 200.
+#    Square cells (dx = dy = 0.02) avoid directional discretisation bias.
+#    Alternative: imax = 400, jmax = 160 (4x cells, chord = 160 cells) gives
+#    ~20 cells thickness → better accuracy but 4x slower.
+# -----------------------------------------------------------------------------
+imax        200
+jmax        80
+
+
+# -----------------------------------------------------------------------------
+#  Time stepping
+#
+#  dt = 0.005:
+#    Explicit time step size.  CFL condition: U * dt / dx = 1.0 * 0.005 / 0.02 = 0.25
+#    Well below the stability limit of 1.0.
+#    Diffusion stability: dt < dx^2 / (2*nu) = 0.0004 / 0.016 = 0.025  →  0.005 < 0.025 ✓
+#    Alternative: dt = 0.002 (more conservative, ~2.5x slower to reach steady state).
+#    Note: tau > 0 overrides dt with an adaptive value, so dt here is just the
+#    initial guess and the upper bound for the adaptive controller.
+#
+#  t_end = 50.0:
+#    Total simulation time.  Convective time unit: T = L / U = 4.0 / 1.0 = 4.0 s
+#    t_end = 50.0 → 12.5 flow-through times.
+#    At Re = 200 the flow reaches steady state after roughly 5–8 flow-through
+#    times, so 12.5 provides a comfortable margin.
+#    Alternative: t_end = 100.0 for higher angles of attack (alpha >= 10 deg)
+#    where the wake takes longer to settle.
+#
+#  tau = 0.5:
+#    Safety factor for the adaptive CFL-based time step control.
+#    The solver computes dt_CFL = tau * min(dx/|u|, dy/|v|, ...) each step.
+#    tau = 0.5 keeps the effective CFL at 0.5 * (theoretical limit).
+#    Alternative: tau = 0.9 (faster but less stable near stagnation point).
+# -----------------------------------------------------------------------------
+dt          0.005
+t_end       50.0
+tau         0.5
+
+
+# -----------------------------------------------------------------------------
+#  Output
+#
+#  dt_value = 5.0:
+#    Write one VTK output file every 5.0 time units.
+#    With t_end = 50.0 this gives 10 output files.
+#    Sufficient to verify that the solution has converged to steady state
+#    by comparing the last two or three files.
+#    Alternative: dt_value = 1.0 for finer temporal tracking (50 files total,
+#    useful if you want to visualise the transient startup behaviour).
+# -----------------------------------------------------------------------------
+dt_value    5.0
+
+
+# -----------------------------------------------------------------------------
+#  Pressure Poisson equation (PPE) solver settings
+#
+#  itermax = 1000:
+#    Maximum number of pressure solver iterations per time step.
+#    1000 is large enough that the eps criterion (below) always triggers first
+#    for well-converged flows.  If the solver hits itermax regularly, the
+#    grid or time step settings need adjustment.
+#    Alternative: itermax = 500 (faster per step, may not converge at early times).
+#
+#  eps = 0.001:
+#    Convergence criterion: iteration stops when the normalised L2-residual
+#    of the discrete Poisson equation falls below eps.
+#    0.001 is a standard choice for incompressible flow at Re = 200 — tight
+#    enough for accurate divergence-free velocity fields, loose enough that
+#    the solver converges within ~20–100 iterations per time step.
+#    Alternative: eps = 0.0001 (stricter, more accurate, 2–3x more iterations).
+#
+#  omg = 1.7:
+#    Over-relaxation factor for the SOR solver.  Only used when solver = SOR
+#    (the default).  Optimal value depends on grid aspect ratio and boundary
+#    conditions; for a rectangular domain the theoretical optimum is
+#    omg_opt = 2 / (1 + sin(pi / max(imax, jmax))) ≈ 1.94 for this grid.
+#    In practice 1.7 is safer and works well across different geometries.
+#    Alternative: omg = 1.5 (more stable, slower convergence).
+#    Note: omg has no effect when using CG-based solvers (PCG_SSOR, etc.).
+#
+#  gamma = 0.5:
+#    Upwind blending factor for the convective terms in the momentum equations.
+#    gamma = 0: pure central differences (2nd-order accurate, but can produce
+#               unphysical oscillations at higher Re or coarse grids).
+#    gamma = 1: full first-order upwind (stable but diffusive, smears gradients).
+#    gamma = 0.5: blend of both — good balance of accuracy and stability at Re = 200.
+#    Alternative: gamma = 0.9 for higher Re or coarser grids.
+# -----------------------------------------------------------------------------
+itermax     1000
+eps         0.001
+omg         1.7
+gamma       0.5
+
+
+# -----------------------------------------------------------------------------
+#  Kinematic viscosity
+#
+#  nu = 0.008:
+#    Derived from the target Reynolds number:
+#      Re = U_inf * c / nu  →  nu = U_inf * c / Re = 1.0 * 1.6 / 200 = 0.008
+#    Re = 200 chosen because:
+#      - Flow is laminar and steady (no vortex shedding, no oscillations)
+#      - Reference drag coefficient known: CD ≈ 0.28 at alpha=0 (Liu et al. 1998)
+#      - Pressure solver converges reliably within t_end = 50
+#    Alternative: nu = 0.0032 → Re = 500 (still laminar but more complex wake).
+# -----------------------------------------------------------------------------
+nu          0.008
+
+
+# -----------------------------------------------------------------------------
+#  Body forces (gravity / external acceleration)
+#
+#  GX = GY = 0.0:
+#    No body forces.  The flow is driven purely by the inflow boundary
+#    condition (UIN), not by a pressure gradient or gravity.
+# -----------------------------------------------------------------------------
+GX          0.0
+GY          0.0
+
+
+# -----------------------------------------------------------------------------
+#  Initial conditions
+#
+#  PI = 0.0:   start with zero pressure everywhere.
+#  UI = 1.0:   initialise the entire domain with the free-stream velocity.
+#  VI = 0.0:   no initial vertical velocity component.
+#
+#  Initialising with U = U_inf (rather than U = 0) gives a better starting
+#  point and reduces the time needed to reach steady state by roughly 30%.
+# -----------------------------------------------------------------------------
+PI          0.0
+UI          1.0
+VI          0.0
+
+
+# -----------------------------------------------------------------------------
+#  Inlet (inflow) boundary conditions
+#
+#  UIN = 1.0, VIN = 0.0:
+#    Uniform horizontal velocity at the left (inflow) boundary.
+#    The free-stream velocity U_inf = 1.0 is non-dimensionalised.
+#    VIN = 0.0: the inflow is always parallel to the x-axis regardless of the
+#    angle of attack.  The angle of attack is encoded in the rotated airfoil
+#    geometry (PGM file), NOT in the inflow direction — this is the standard
+#    wind-tunnel approach.
+# -----------------------------------------------------------------------------
+UIN         1.0
+VIN         0.0
+
+
+# -----------------------------------------------------------------------------
+#  Wall groups
+#
+#  num_of_walls = 1:
+#    The solver expects one group of wall cells.  All WALL pixels in the PGM
+#    (channel walls + airfoil) are treated as a single no-slip wall group.
+# -----------------------------------------------------------------------------
+num_of_walls 1
+
+
+# =============================================================================
+#  Pressure solver selection
+#
+#  Uncomment exactly ONE of the lines below.
+#
+#  Available solvers:
+#
+#  SOR               — Successive Over-Relaxation.
+#                      The default fallback (used when no solver line is given
+#                      or an unknown name is specified).
+#                      Simple to understand, but slowest convergence O(N^1.5).
+#                      Controlled by omg. Works with any iproc x jproc.
+#
+#  CG_STANDARD       — Conjugate Gradient without preconditioner.
+#                      Faster than SOR for large grids (O(N) per iteration,
+#                      O(sqrt(N)) iterations).  MPI-compatible (any iproc x jproc).
+#
+#  PCG_SSOR          — Preconditioned CG with SSOR (Symmetric SOR) preconditioner.
+#                      Best convergence of all hand-written solvers for this grid.
+#                      Typically 3–5x fewer iterations than CG_STANDARD.
+#                      MPI-compatible (any iproc x jproc).
+#
+#  PCG_SSOR_SERIAL   — Same algorithm as PCG_SSOR but serial implementation.
+#                      Use only with iproc = jproc = 1.
+#
+#  PCG_JACOBI        — Preconditioned CG with Jacobi (diagonal scaling) preconditioner.
+#                      Simpler preconditioner than SSOR, slightly less effective.
+#                      MPI-compatible (any iproc x jproc).
+#
+#  PCG_RBLU          — Preconditioned CG with Red-Black LU preconditioner.
+#                      Strong preconditioner, good for anisotropic problems.
+#                      MPI-compatible (any iproc x jproc).
+#
+#  PCG_MG            — Preconditioned CG with Multigrid preconditioner.
+#                      Theoretically O(N) overall (grid-independent convergence).
+#                      MPI-compatible (any iproc x jproc).
+#
+#  EIGEN_CG          — CG solver from the Eigen library (serial, 1x1 only).
+#                      Requires iproc = jproc = 1.
+#
+#  EIGEN_PCG         — PCG with Incomplete Cholesky preconditioner (Eigen library).
+#                      Requires iproc = jproc = 1.
+#                      Typically the fastest serial solver for this problem.
+# =============================================================================
+# solver    SOR
+# solver    CG_STANDARD
+# solver    PCG_SSOR
+# solver    PCG_SSOR_SERIAL
+# solver    PCG_JACOBI
+# solver    PCG_RBLU
+# solver    PCG_MG
+# solver    EIGEN_CG
+# solver    EIGEN_PCG
+
+
+# -----------------------------------------------------------------------------
+#  MPI parallelisation
+#
+#  The domain is decomposed into iproc x jproc sub-domains.
+#  Total MPI ranks required: iproc * jproc.
+#  Run command:  mpirun -n <iproc*jproc> ./build/fluidchen <this_file>
+#
+#  Constraints:
+#    - EIGEN_CG and EIGEN_PCG: serial only, must use iproc = jproc = 1.
+#    - PCG_SSOR_SERIAL:         serial only, must use iproc = jproc = 1.
+#    - All other solvers:       any iproc x jproc decomposition.
+#
+#  iproc = 1, jproc = 1:  serial run (1 process)
+#  iproc = 2, jproc = 2:  parallel run (4 processes, 2x2 domain split)
+# -----------------------------------------------------------------------------
+iproc       1
+jproc       1
