@@ -145,3 +145,94 @@ You might run into a problem where the VTK library is not found. To fix this, yo
 ### No rule to make target '/usr/lib/x86_64-linux-gnu/libdl.so'
 
 We are investigating an [issue](https://gitlab.lrz.de/tum-i05/public/fluidchen-skeleton/-/issues/3) that appears on specific systems and combinations of dependencies.
+
+---
+
+## Case Study: NACA 0012 Airfoil Wind Tunnel
+
+A custom case study simulating flow past a **NACA 0012 airfoil** in a 2D wind tunnel channel at **Re = 200**, **α = 0°**.
+
+### Geometry
+
+The airfoil geometry is rasterised onto a 200×80 Cartesian grid using an included Python script. Four angles of attack are provided:
+
+| File | α | Description |
+|------|---|-------------|
+| `AirfoilWindTunnel.pgm` | 0° | Symmetric, zero lift |
+| `AirfoilWindTunnel_alpha5.pgm` | 5° | Mild lift |
+| `AirfoilWindTunnel_alpha10.pgm` | 10° | Moderate lift |
+| `AirfoilWindTunnel_alpha15.pgm` | 15° | Near stall |
+
+Generate a PGM for any angle of attack:
+```shell
+python3 tools/generate_airfoil_pgm.py --alpha 0
+```
+
+### Domain & Physical Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| Domain | 4.0 m × 2.0 m (4c × 2c) |
+| Grid | 200 × 80 cells |
+| Chord length | c = 1.0 m |
+| U∞ | 1.0 m/s |
+| ν | 0.005 m²/s |
+| Re = U∞c/ν | **200** |
+| t_end | 50 s |
+| dt_value (VTK output) | 5.0 s |
+
+### Running the Airfoil Case
+
+```shell
+# Build first (see above)
+cd build
+
+# Serial run — EIGEN_CG solver (recommended, ~64 min wall time)
+mpirun -n 1 ./fluidchen ../example_cases/AirfoilWindTunnel/AirfoilWindTunnel_Re200_eigen_cg_1_1.dat
+
+# Parallel run — PCG_SSOR solver, 2×2 MPI decomposition
+mpirun -n 4 ./fluidchen ../example_cases/AirfoilWindTunnel/AirfoilWindTunnel_Re200_pcg_ssor_2_2.dat
+```
+
+Progress is logged to the console (`[step N] t=... iters=... residual=...`) and to `sor_log.csv` in the output directory.
+
+### Analysis & Validation
+
+A Python analysis script generates a 6-page PDF report:
+
+```shell
+python3 tools/analyze_airfoil.py \
+  example_cases/AirfoilWindTunnel/AirfoilWindTunnel_Re200_eigen_cg_1_1_Output_1_1
+```
+
+The report includes:
+- Flow field overview (pressure, velocity magnitude, u, v — all on a consistent blue→red scale)
+- Close-up view around the airfoil with streamlines
+- Full convergence history (residual and CG iterations over all 8,000 time steps)
+- Solver cost analysis (iteration distribution, wall-clock breakdown)
+- Validation against literature (Cp distribution, CD/CL table)
+
+**Pre-computed results** (EIGEN_CG, Re=200, α=0°) are included in `example_cases/AirfoilWindTunnel/AirfoilWindTunnel_Re200_eigen_cg_1_1_Output_1_1/`:
+- `sor_log.csv` — convergence log (8,000 steps, t=0→50)
+- `airfoil_analysis.pdf` — full analysis report
+- VTK snapshots at t = 0, 5, 10, 15, 20, 25, 30, 35, 40, 45 s
+
+### Validation Results (Re=200, α=0°)
+
+| Quantity | Simulation | Literature | Note |
+|----------|-----------|------------|------|
+| CD (pressure) | **0.257** | ~0.25–0.30 | Pressure drag only |
+| CL | **0.000** | 0.000 | Exact symmetry at α=0° |
+| Steady state from | t ≈ 0.6 s | expected | Re=200 → no vortex shedding |
+| CG iter/step (median) | **0** | — | Warm-start converges instantly |
+| CG iter/step (mean) | **1.7** | — | 99.4% of steps: 0 iterations |
+
+### Pressure Solvers Available
+
+| Solver key | Parallelism | Notes |
+|------------|-------------|-------|
+| `EIGEN_CG` | Serial (1×1) | Recommended for accuracy |
+| `EIGEN_PCG_IC` | Serial (1×1) | Incomplete Cholesky preconditioner |
+| `PCG_SSOR` | MPI parallel | Use with 2×2 or 4×1 decomposition |
+| `CG_STANDARD` | MPI parallel | Standard CG |
+| `SOR_STANDARD` | MPI parallel | Slow convergence on fine grids |
