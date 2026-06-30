@@ -2,6 +2,12 @@
 """
 Generate a PGM geometry file for the Airfoil Wind Tunnel case study.
 
+Usage:
+    python3 tools/generate_airfoil_pgm.py [--alpha DEGREES]
+
+    --alpha: angle of attack in degrees (default 0). Output file is named
+             AirfoilWindTunnel_alpha<N>.pgm (or AirfoilWindTunnel.pgm for 0).
+
 Domain layout (DOMAIN_W x DOMAIN_H cells):
   - Left column  (col=0):          Inflow  (pixel=1)
   - Right column (col=DOMAIN_W-1): Outflow (pixel=2)
@@ -13,6 +19,7 @@ Forbidden cells (obstacle cells with fluid on opposite sides, i.e. B_NS or
 B_EW) are iteratively converted to fluid, producing a blunt trailing edge.
 """
 
+import argparse
 import math
 import os
 import numpy as np
@@ -31,11 +38,9 @@ DOMAIN_H = JMAX + 2   # = 82
 CHORD    = 80      # airfoil chord length in interior grid cells
 OFFSET_X = 40      # x-offset: 0.5c upstream of leading edge
 OFFSET_Y = (JMAX // 2) + 1  # y-center in PGM row coords (mid of interior)
-ALPHA_DEG = 0.0    # angle of attack in degrees
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__),
                           "..", "example_cases", "AirfoilWindTunnel")
-OUTPUT_PGM = os.path.join(OUTPUT_DIR, "AirfoilWindTunnel.pgm")
 
 # PGM pixel values
 FLUID   = 0
@@ -70,7 +75,7 @@ def rotate(dx: float, dy: float, alpha_rad: float):
 # ---------------------------------------------------------------------------
 # Build PGM array  (row 0 = physical bottom, row DOMAIN_H-1 = physical top)
 # ---------------------------------------------------------------------------
-def build_pgm() -> np.ndarray:
+def build_pgm(alpha_deg: float = 0.0) -> np.ndarray:
     pgm = np.zeros((DOMAIN_H, DOMAIN_W), dtype=np.int32)
 
     # Domain boundaries — matching ChannelWithObstacle.pgm convention:
@@ -81,7 +86,7 @@ def build_pgm() -> np.ndarray:
     pgm[:, 0]    = INFLOW   # left ghost column
     pgm[:, -1]   = OUTFLOW  # right ghost column
 
-    alpha_rad = math.radians(ALPHA_DEG)
+    alpha_rad = math.radians(alpha_deg)
 
     # Rasterise NACA 0012 in interior cells: rows 1..DOMAIN_H-2, cols 1..DOMAIN_W-2
     for row in range(1, DOMAIN_H - 1):
@@ -151,14 +156,14 @@ def eliminate_forbidden_cells(pgm: np.ndarray) -> int:
 # ---------------------------------------------------------------------------
 # Write PGM (P2 ASCII)
 # ---------------------------------------------------------------------------
-def write_pgm(pgm: np.ndarray, path: str) -> None:
+def write_pgm(pgm: np.ndarray, path: str, alpha_deg: float = 0.0) -> None:
     H, W = pgm.shape
     maxval = max(INFLOW, OUTFLOW, WALL)
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
     with open(path, "w") as f:
         f.write("P2\n")
-        f.write(f"# NACA0012 airfoil, chord={CHORD}, alpha={ALPHA_DEG:.1f}deg\n")
+        f.write(f"# NACA0012 airfoil, chord={CHORD}, alpha={alpha_deg:.1f}deg\n")
         f.write(f"{W} {H}\n")
         f.write(f"{maxval}\n")
         # PGM row 0 = top of image; solver reads bottom-to-top, so we write
@@ -172,10 +177,22 @@ def write_pgm(pgm: np.ndarray, path: str) -> None:
 # Main
 # ---------------------------------------------------------------------------
 def main() -> None:
-    print(f"Building domain {DOMAIN_W}x{DOMAIN_H}, chord={CHORD} cells, "
-          f"alpha={ALPHA_DEG}deg")
+    parser = argparse.ArgumentParser(description="Generate NACA 0012 PGM geometry")
+    parser.add_argument("--alpha", type=float, default=0.0,
+                        help="Angle of attack in degrees (default: 0)")
+    args = parser.parse_args()
+    alpha_deg = args.alpha
 
-    pgm = build_pgm()
+    if alpha_deg == 0.0:
+        output_pgm = os.path.join(OUTPUT_DIR, "AirfoilWindTunnel.pgm")
+    else:
+        tag = f"alpha{int(round(alpha_deg))}"
+        output_pgm = os.path.join(OUTPUT_DIR, f"AirfoilWindTunnel_{tag}.pgm")
+
+    print(f"Building domain {DOMAIN_W}x{DOMAIN_H}, chord={CHORD} cells, "
+          f"alpha={alpha_deg}deg")
+
+    pgm = build_pgm(alpha_deg)
 
     wall_before = int(np.sum(pgm == WALL))
     n_fixed = eliminate_forbidden_cells(pgm)
@@ -183,8 +200,8 @@ def main() -> None:
     print(f"Forbidden-cell elimination: {n_fixed} cells converted to fluid "
           f"({wall_before} → {wall_after} wall cells)")
 
-    write_pgm(pgm, OUTPUT_PGM)
-    print(f"Written: {OUTPUT_PGM}")
+    write_pgm(pgm, output_pgm, alpha_deg)
+    print(f"Written: {output_pgm}")
 
     # Quick ASCII preview (80-char wide terminal)
     print("\nGeometry preview (. = fluid, # = wall, > = inflow, < = outflow):")
